@@ -270,3 +270,28 @@ def test_orden_cpu_para_edicion():
                       ("ryzen 9 7950x", "ryzen 9 7950x3d"), ("ryzen 9 9950x", "ryzen 9 9950x3d"),
                       ("ryzen 9 9950x3d", "ryzen 9 9950x3d2")):
         assert o[base] < o[x3d]
+
+
+def test_telegram_reintenta_cortes_de_red_sin_mostrar_token(monkeypatch):
+    import httpx
+    import pytest
+    from bot import telegram as tgmod
+    monkeypatch.setattr(tgmod.time, "sleep", lambda s: None)
+    llamadas = {"n": 0}
+
+    def manejador(req):
+        llamadas["n"] += 1
+        if llamadas["n"] == 1:
+            raise httpx.ConnectError("caído", request=req)
+        return httpx.Response(200, json={"ok": True, "result": []})
+
+    tg = Telegram(Secretos("123:SECRETO", "1", ""))
+    tg.http = httpx.Client(transport=httpx.MockTransport(manejador))
+    assert tg._api("getUpdates") == []
+    assert llamadas["n"] == 2
+
+    tg.http = httpx.Client(transport=httpx.MockTransport(
+        lambda req: (_ for _ in ()).throw(httpx.ConnectError("caído", request=req))))
+    with pytest.raises(RuntimeError) as e:
+        tg._api("getUpdates")
+    assert "SECRETO" not in str(e.value) and "api.telegram.org" not in str(e.value)

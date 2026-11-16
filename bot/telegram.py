@@ -3,6 +3,7 @@ Solo habla con los chat_id autorizados; a cualquier otro lo ignora."""
 from __future__ import annotations
 
 import logging
+import time
 
 import httpx
 
@@ -21,13 +22,18 @@ class Telegram:
         self.http = httpx.Client(timeout=20)
         self.enviados: list[dict] = []  # para tests y dry-run
 
-    def _api(self, metodo: str, **datos) -> dict:
+    def _api(self, metodo: str, intentos: int = 3, **datos) -> dict:
         # La URL lleva el token: nunca se loguea ni viaja en un mensaje de error.
-        try:
-            r = self.http.post(f"https://api.telegram.org/bot{self.s.token}/{metodo}", json=datos)
-            j = r.json()
-        except Exception as e:  # noqa: BLE001
-            raise RuntimeError(f"Telegram {metodo}: error de red ({type(e).__name__})") from None
+        # Los cortes de red suelen ser momentáneos: reintenta con 2 y 4 segundos de pausa.
+        for n in range(intentos):
+            try:
+                r = self.http.post(f"https://api.telegram.org/bot{self.s.token}/{metodo}", json=datos)
+                j = r.json()
+                break
+            except (httpx.TransportError, ValueError) as e:
+                if n == intentos - 1:
+                    raise RuntimeError(f"Telegram {metodo}: error de red ({type(e).__name__})") from None
+                time.sleep(2 * (n + 1))
         if not j.get("ok"):
             raise RuntimeError(f"Telegram {metodo}: {j.get('description')}")
         return j["result"]
