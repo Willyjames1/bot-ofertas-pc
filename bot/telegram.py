@@ -1,0 +1,75 @@
+"""Envío de mensajes y lectura de comandos (getUpdates) por Telegram.
+Solo habla con los chat_id autorizados; a cualquier otro lo ignora."""
+from __future__ import annotations
+
+import logging
+
+import httpx
+
+from .config import Secretos
+
+log = logging.getLogger("bot.telegram")
+LIMITE = 4000
+
+
+class Telegram:
+    def __init__(self, secretos: Secretos, dry_run: bool = False):
+        self.s = secretos
+        self.dry_run = dry_run or not secretos.token
+        if not secretos.token and not dry_run:
+            log.warning("No hay TELEGRAM_TOKEN: funciono en modo dry-run")
+        self.http = httpx.Client(timeout=20)
+        self.enviados: list[dict] = []  # para tests y dry-run
+
+    def _api(self, metodo: str, **datos) -> dict:
+        # La URL lleva el token: nunca se loguea ni viaja en un mensaje de error.
+        try:
+            r = self.http.post(f"https://api.telegram.org/bot{self.s.token}/{metodo}", json=datos)
+            j = r.json()
+        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(f"Telegram {metodo}: error de red ({type(e).__name__})") from None
+        if not j.get("ok"):
+            raise RuntimeError(f"Telegram {metodo}: {j.get('description')}")
+        return j["result"]
+
+    def enviar(self, chat_id: str, texto: str, silencioso: bool = False) -> bool:
+        if not chat_id:
+            return False
+        if chat_id not in self.s.autorizados() and not self.dry_run:
+            log.error("chat_id no autorizado, no envío")
+            return False
+        partes = [texto[i:i + LIMITE] for i in range(0, len(texto), LIMITE)] or [""]
+        for parte in partes:
+            self.enviados.append({"chat_id": chat_id, "texto": parte, "silencioso": silencioso})
+            if self.dry_run:
+                print(f"\n----- [DRY-RUN] a {'yo' if chat_id == self.s.chat_yo else 'hermano'}"
+                      f"{' (silencioso)' if silencioso else ' (SUENA)'} -----\n{parte}\n")
+                continue
+            try:
+                self._api("sendMessage", chat_id=chat_id, text=parte, parse_mode="HTML",
+                          disable_web_page_preview=True, disable_notification=silencioso)
+            except Exception as e:  # noqa: BLE001
+                log.error("No pude enviar a Telegram: %s", e)
+                return False
+        return True
+
+    def leer_comandos(self, offset: int | None) -> tuple[list[dict], int | None]:
+        """Devuelve ([{chat_id, texto}], nuevo_offset). Ignora chats no autorizados."""
+        if self.dry_run:
+            return [], offset
+        try:
+            updates = self._api("getUpdates", offset=offset, timeout=0,
+                                allowed_updates=["message"])
+        except Exception as e:  # noqa: BLE001
+            log.error("getUpdates falló: %s", e)
+            return [], offset
+        comandos = []
+        for u in updates:
+            offset = u["update_id"] + 1
+            msg = u.get("message") or {}
+            chat = str((msg.get("chat") or {}).get("id", ""))
+            if chat not in self.s.autorizados():
+                continue  # silencio total para desconocidos
+            if (txt := msg.get("text", "")).startswith("/"):
+                comandos.append({"chat_id": chat, "texto": txt.strip()})
+        return comandos, offset

@@ -1,0 +1,79 @@
+# ============================================================
+#  Filtros y ajustes del bot. Lo podés editar a mano o desde
+#  Telegram (Fase 2). Los precios son con impuestos incluidos:
+#  AUD con GST, ARS precio de transferencia/contado.
+# ============================================================
+
+destinatarios:
+  yo: {activo: true}
+  hermano: {activo: false, zona_horaria: Australia/Sydney, fecha_viaje: 2026-12-01}
+
+placas:
+  activo: true
+  chips: [RTX 5060 Ti 16GB, RTX 5070, RTX 5070 Ti, RTX 5080, RX 9060 XT 16GB, RX 9070, RX 9070 XT]
+  vram_min_gb: 12
+  precio_max: {AUD: 2600, ARS: 3500000}
+  objetivos:
+    RTX 5070 Ti: {AUD: 1500, ARS: 2100000}
+    RTX 5080: {AUD: 2400, ARS: 3000000}
+    RX 9070 XT: {AUD: 950, ARS: 1400000}
+
+cpu:
+  activo: true
+  socket: [AM5]
+  nucleos_min: 8
+  objetivos:
+    Ryzen 9 9950X3D: {AUD: 880, ARS: 1200000}
+
+ram:
+  activo: true
+  tipo: DDR5
+  capacidad_gb: [32, 64, 96]
+  velocidad_min: 6000
+  cl_max: 36
+  modulos: 2
+  objetivos:
+    64GB: {AUD: 1300, ARS: 1800000}
+
+mothers: {activo: true, chipsets: [B850, X870, X870E], wifi: true}
+ssd: {activo: true, capacidad_tb: [2, 4], gen_min: 4}
+fuentes: {activo: true, watts_min: 850, certificacion_min: Gold, atx3: true}
+refrigeracion: {activo: true, tipos: [AIO 360, AIO 280]}
+gabinetes: {activo: false}
+monitores: {activo: false}
+
+general:
+  baja_minima_pct: 5
+  ganga_vs_mediana_pct: 15
+  votos_ozbargain_urgente: 25
+  tope_alertas_que_suenan_por_dia: 6
+  silencio_noche: {desde: "00:00", hasta: "08:00"}
+  aduana: false
+  mostrar_tray: true
+  combos: false
+
+# ------------------------------------------------------------
+#  Ajustes técnicos (normalmente no hace falta tocarlos)
+# ------------------------------------------------------------
+avisos:
+  re_aviso_baja_pct: 3          # misma tienda+modelo no vuelve a avisar salvo que baje otro 3%
+  sospechoso_vs_mediana_pct: 40 # 40% o más bajo la mediana = "sospechoso", no oferta
+  horas_historial_para_minimo: 24 # no festejar "mínimo histórico" hasta tener 1 día de datos
+
+frecuencia:
+  feeds_cada_min: 20
+  tiendas_cada_min: 20
+  turnos_tiendas: 2              # las tiendas se reparten en N grupos que se turnan
+
+black_friday:
+  desde: 2026-11-23
+  hasta: 2026-12-01
+  feeds_cada_min: 10
+  tiendas_cada_min: 20
+  votos_ozbargain_urgente: 15
+  tope_alertas_que_suenan_por_dia: 10
+
+foros:
+  ozbargain:
+    - https://www.ozbargain.com.au/cat/computing/deals/feed
+  # Reddit quedó afuera de la Fase 1 (RSS cortado el 13/11/2026, API sin acceso nuevo).

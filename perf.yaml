@@ -1,0 +1,136 @@
+# ============================================================
+#  Índice de rendimiento relativo (editable).
+#  juegos: 1440p, promedio de rasterizado. davinci: edición en DaVinci Resolve Studio.
+#  Base 100: RTX 5080 (placas) y Ryzen 9 9950X (cpu, davinci) / Ryzen 7 9800X3D (cpu, juegos).
+#
+#  ⚠️ NÚMEROS PROVISORIOS: todavía NO se usan para nada. En la Fase 2 se reemplazan por los
+#  de las fuentes de abajo, con el link de cada review, y recién ahí alimentan /top y el resumen.
+#
+#  Para edición: las RTX 50 decodifican por hardware H.264/H.265 4:2:2 10-bit (lo que graba
+#  la FX30). Las RTX 40 y las Radeon no, así que en "davinci" quedan penalizadas.
+# ============================================================
+
+# ------------------------------------------------------------
+#  ORDEN DE GAMAS (de MENOR a MAYOR). Es lo único que usa la "oportunidad fuerte" en la
+#  Fase 1: suena si un modelo que está MÁS ABAJO en la lista cuesta igual o más que uno de más
+#  arriba, siempre dentro de tus filtros. Movelos o borralos a gusto. Los números de abajo
+#  todavía no se usan.
+# ------------------------------------------------------------
+gama:
+  placas:
+    - RX 7600
+    - RTX 4060
+    - RX 7600 XT
+    - RTX 5060
+    - RTX 4060 Ti 8GB
+    - RX 9060 XT 8GB
+    - RTX 5060 Ti 8GB
+    - RTX 4060 Ti 16GB
+    - RX 9060 XT 16GB
+    - RTX 5060 Ti 16GB
+    - RX 7700 XT
+    - RTX 4070
+    - RX 7800 XT
+    - RTX 4070 Super
+    - RX 7900 GRE
+    - RTX 5070
+    - RTX 4070 Ti
+    - RX 9070
+    - RX 7900 XT
+    - RTX 4070 Ti Super
+    - RX 9070 XT
+    - RTX 5070 Ti
+    - RX 7900 XTX
+    - RTX 4080
+    - RTX 4080 Super
+    - RTX 5080
+    - RTX 4090
+    - RTX 5090
+  # CPU pensado para EDICIÓN: primero manda la cantidad de núcleos (6 < 8 < 12 < 16);
+  # dentro de cada grupo, la generación (7000 < 9000) y cada X3D va arriba de su mismo
+  # modelo sin X3D (7700X < 7800X3D, 9700X < 9800X3D < 9850X3D, 9950X < 9950X3D < 9950X3D2).
+  cpu:
+    # 6 núcleos
+    - Ryzen 5 7600
+    - Ryzen 5 7600X
+    - Ryzen 5 7600X3D
+    - Ryzen 5 9600
+    - Ryzen 5 9600X
+    # 8 núcleos
+    - Ryzen 7 7700
+    - Ryzen 7 7700X
+    - Ryzen 7 7800X3D
+    - Ryzen 7 9700X
+    - Ryzen 7 9800X3D
+    - Ryzen 7 9850X3D
+    # 12 núcleos
+    - Ryzen 9 7900
+    - Ryzen 9 7900X
+    - Ryzen 9 7900X3D
+    - Ryzen 9 9900X
+    - Ryzen 9 9900X3D
+    # 16 núcleos
+    - Ryzen 9 7950X
+    - Ryzen 9 7950X3D
+    - Ryzen 9 9950X
+    - Ryzen 9 9950X3D
+    - Ryzen 9 9950X3D2
+
+fuentes:
+  juegos_placas: https://www.techpowerup.com/review/   # reviews de TechPowerUp, "Relative Performance 2560x1440"
+  davinci_placas: https://www.pugetsystems.com/labs/articles/   # Puget Systems, DaVinci Resolve Studio GPU
+  juegos_cpu: https://www.techpowerup.com/review/      # TechPowerUp, "Gaming Performance 2560x1440"
+  davinci_cpu: https://www.pugetsystems.com/labs/articles/      # Puget Systems, DaVinci Resolve CPU
+
+placas:
+  RTX 5090:          {juegos: 128, davinci: 130}
+  RTX 4090:          {juegos: 118, davinci: 105}
+  RTX 5080:          {juegos: 100, davinci: 100}
+  RTX 4080 Super:    {juegos: 92,  davinci: 84}
+  RTX 4080:          {juegos: 90,  davinci: 82}
+  RX 7900 XTX:       {juegos: 90,  davinci: 72}
+  RTX 5070 Ti:       {juegos: 87,  davinci: 90}
+  RX 9070 XT:        {juegos: 84,  davinci: 68}
+  RX 7900 XT:        {juegos: 79,  davinci: 64}
+  RTX 4070 Ti Super: {juegos: 78,  davinci: 72}
+  RX 9070:           {juegos: 75,  davinci: 62}
+  RTX 4070 Ti:       {juegos: 72,  davinci: 66}
+  RTX 5070:          {juegos: 68,  davinci: 74}
+  RX 7900 GRE:       {juegos: 67,  davinci: 56}
+  RTX 4070 Super:    {juegos: 65,  davinci: 60}
+  RX 7800 XT:        {juegos: 60,  davinci: 50}
+  RTX 4070:          {juegos: 56,  davinci: 54}
+  RX 7700 XT:        {juegos: 52,  davinci: 44}
+  RTX 5060 Ti 16GB:  {juegos: 50,  davinci: 56}
+  RX 9060 XT 16GB:   {juegos: 50,  davinci: 40}
+  RTX 5060 Ti 8GB:   {juegos: 47,  davinci: 50}
+  RX 9060 XT 8GB:    {juegos: 46,  davinci: 36}
+  RTX 4060 Ti 16GB:  {juegos: 43,  davinci: 42}
+  RTX 4060 Ti 8GB:   {juegos: 42,  davinci: 40}
+  RTX 5060:          {juegos: 40,  davinci: 44}
+  RTX 4060:          {juegos: 35,  davinci: 34}
+  RX 7600 XT:        {juegos: 35,  davinci: 30}
+  RX 7600:           {juegos: 34,  davinci: 28}
+
+cpu:
+  Ryzen 7 9850X3D:   {juegos: 102, davinci: 74}
+  Ryzen 9 9950X3D2:  {juegos: 101, davinci: 101}
+  Ryzen 7 9800X3D:   {juegos: 100, davinci: 72}
+  Ryzen 9 9950X3D:   {juegos: 99,  davinci: 100}
+  Ryzen 9 9900X3D:   {juegos: 95,  davinci: 88}
+  Ryzen 7 7800X3D:   {juegos: 92,  davinci: 64}
+  Ryzen 9 7950X3D:   {juegos: 91,  davinci: 90}
+  Core i9-14900K:    {juegos: 86,  davinci: 96}
+  Ryzen 9 9950X:     {juegos: 85,  davinci: 100}
+  Ryzen 9 9900X:     {juegos: 84,  davinci: 88}
+  Ryzen 7 9700X:     {juegos: 84,  davinci: 72}
+  Core i7-14700K:    {juegos: 84,  davinci: 90}
+  Core Ultra 9 285K: {juegos: 82,  davinci: 102}
+  Ryzen 9 7950X:     {juegos: 82,  davinci: 92}
+  Ryzen 9 7900X:     {juegos: 81,  davinci: 82}
+  Core Ultra 7 265K: {juegos: 80,  davinci: 95}
+  Ryzen 7 7700X:     {juegos: 80,  davinci: 68}
+  Ryzen 5 9600X:     {juegos: 80,  davinci: 60}
+  Ryzen 7 7700:      {juegos: 78,  davinci: 66}
+  Ryzen 5 7600X:     {juegos: 77,  davinci: 56}
+  Ryzen 5 7600:      {juegos: 75,  davinci: 54}
