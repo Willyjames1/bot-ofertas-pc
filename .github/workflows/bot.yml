@@ -20,9 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -51,10 +51,10 @@ jobs:
         if: always()
         run: |
           test -f datos/precios.db || exit 0
-          cd datos
-          git init -q -b datos
-          git config user.name "bot-ofertas"
-          git config user.email "bot-ofertas@users.noreply.github.com"
-          git add precios.db
-          git commit -q -m "datos $(date -u +%FT%TZ)"
-          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" datos:datos
+          # Commit "huérfano" con solo precios.db, armado sin tocar la rama main,
+          # y empujado con las credenciales que ya dejó actions/checkout.
+          BLOB=$(git hash-object -w datos/precios.db)
+          TREE=$(printf '100644 blob %s\tprecios.db\n' "$BLOB" | git mktree)
+          COMMIT=$(git -c user.name="bot-ofertas" -c user.email="bot-ofertas@users.noreply.github.com" \
+                   commit-tree "$TREE" -m "datos $(date -u +%FT%TZ)")
+          git push -q -f origin "$COMMIT:refs/heads/datos"
