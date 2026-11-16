@@ -147,7 +147,7 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
 | MSY | 🇦🇺 | igual que Umart | si reciben muchos pedidos contestan "404" a todo: el bot lo toma como freno y las deja 2 h en pausa |
 | staticICE | 🇦🇺 | búsquedas armadas desde `config.yaml` | cubre PC Case Gear, Scorptec, Mwave, PLE, JW, CCPU, Computer Alliance, MegaBuy, I-Tech y más. No informa stock: el aviso lo aclara. Saltea filas sin actualizar hace más de 3 días y tiendas con precios viejos (ver abajo) |
 | Compra Gamer | 🇦🇷 | el catálogo entero en un JSON (1 pedido por corrida) | precio especial (transferencia) y de lista. Saltea outlet y lo que solo se vende en combos o en "Armá tu PC" |
-| Katech | 🇦🇷 | API pública de WooCommerce (100 productos por pedido) | precio efectivo/transferencia y stock. El de lista y las cuotas solo están en la ficha de cada producto: no se leen |
+| Katech | 🇦🇷 | API pública de WooCommerce (100 productos por pedido) | precio efectivo/transferencia y stock. El de lista y las cuotas solo están en la ficha de cada producto: no se leen. **Desde GitHub Actions contesta 403 anti-bots** (desde una PC en Argentina anda): queda como caída, reintenta con 1 pedido cada 2 h y vuelve sola si la tienda lo permite |
 | Venex | 🇦🇷 | listados de 12 (`?page=N`) | precio contado efectivo. El listado no informa stock ni precio de lista |
 | Gezatek | 🇦🇷 | listados (`?page=N`) | "Precio Geza" (transferencia), precio con Mercado Pago como lista, y stock |
 | Mexx | 🇦🇷 | cada categoría en una página (`?all=1`) | "Mejor precio" (efectivo/transferencia) y stock |
