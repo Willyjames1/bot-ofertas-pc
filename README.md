@@ -146,6 +146,11 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
 | Umart | 🇦🇺 | listados por categoría (`?page=N`) | misma empresa y servidor que MSY: van en turnos distintos y con pausas de 6–9 s |
 | MSY | 🇦🇺 | igual que Umart | si reciben muchos pedidos contestan "404" a todo: el bot lo toma como freno y las deja 2 h en pausa |
 | staticICE | 🇦🇺 | búsquedas armadas desde `config.yaml` | cubre PC Case Gear, Scorptec, Mwave, PLE, JW, CCPU, Computer Alliance, MegaBuy, I-Tech y más. No informa stock: el aviso lo aclara. Saltea filas sin actualizar hace más de 3 días y tiendas con precios viejos (ver abajo) |
+| Compra Gamer | 🇦🇷 | el catálogo entero en un JSON (1 pedido por corrida) | precio especial (transferencia) y de lista. Saltea outlet y lo que solo se vende en combos o en "Armá tu PC" |
+| Katech | 🇦🇷 | API pública de WooCommerce (100 productos por pedido) | precio efectivo/transferencia y stock. El de lista y las cuotas solo están en la ficha de cada producto: no se leen |
+| Venex | 🇦🇷 | listados de 12 (`?page=N`) | precio contado efectivo. El listado no informa stock ni precio de lista |
+| Gezatek | 🇦🇷 | listados (`?page=N`) | "Precio Geza" (transferencia), precio con Mercado Pago como lista, y stock |
+| Mexx | 🇦🇷 | cada categoría en una página (`?all=1`) | "Mejor precio" (efectivo/transferencia) y stock |
 
 - **Categorías de la Fase 2** (mothers, SSD, fuentes, refrigeración): se guardan pero todavía no
   avisan. Se leen cada 6 h y de a una por corrida, para no cargar a las tiendas.
@@ -153,6 +158,10 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
   Computer & Parts Land y Austin aparecían a la mitad de lo que cobra el resto). Si la mitad o más
   de los productos de una tienda están por debajo del 75% de lo que cobran las demás por el mismo
   modelo, esa tienda no se usa en esa categoría (queda en el log).
+- **Argentina**: el precio que se compara y avisa es el de transferencia/contado; el de lista va al
+  lado cuando la tienda lo muestra en el listado (Compra Gamer y Gezatek). Ninguna de las cinco
+  muestra las cuotas sin interés en el listado, así que por ahora no aparecen en los avisos (leerlas
+  implicaría pedir la ficha de cada producto, cientos de pedidos por corrida).
 - `robots.txt` se respeta con comodines (`Disallow: /*sort=*`), cosa que el lector de Python no hace.
 
 ## Fuentes que no se pueden leer
@@ -161,6 +170,7 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
 |---|---|---|
 | PC Case Gear, Scorptec | bloqueadas | Cloudflare pide verificación. Se cubren con staticICE y OzBargain |
 | Centre Com | bloqueada | AWS WAF "Human Verification" |
+| FullH4rd | bloqueada | Cloudflare contesta 403 "Your request was blocked" |
 | Mwave (directo) | 429 | Shopify contesta "demasiados pedidos" aun con 1 pedido cada 15 min. Se cubre con staticICE |
 | Computer & Parts Land (directo) | bloqueada | Cloudflare. Sus precios en staticICE se filtran si están desfasados |
 | Reddit | fuera de la Fase 1 | RSS cortado el 13/11/2026, API sin acceso nuevo desde el 31/10/2026 y `robots.txt` con `Disallow: /` |

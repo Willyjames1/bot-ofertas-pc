@@ -283,7 +283,8 @@ def parsear_ram(o: Oferta, t: str) -> None:
         o.descartada = "no es RAM de escritorio"
         return
     total = mods = vel = cl = None
-    es_ddr5 = "DDR5" in t
+    # algunas tiendas no repiten "DDR5" en el título cuando la categoría ya es solo DDR5
+    es_ddr5 = "DDR5" in t or (o.datos.get("ddr") == "DDR5" and "DDR4" not in t)
     if m := RE_CORSAIR.search(t):
         total, mods, vel, cl = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
         es_ddr5 = True
@@ -296,6 +297,12 @@ def parsear_ram(o: Oferta, t: str) -> None:
     if "DDR4" in t and not es_ddr5:
         o.descartada = "DDR4"
         return
+    if not es_ddr5 and not re.search(r"\bDDR\d", t):
+        # sin "DDRx" en el título: 5200 MHz o más solo existe en DDR5
+        for patron in (RE_VEL, RE_VEL_DDR, RE_VEL_SUELTA):
+            if (m := patron.search(t)) and 5200 <= int(m.group(1)) <= 10000:
+                es_ddr5 = True
+                break
     if not es_ddr5:
         o.descartada = "no dice DDR5"
         return

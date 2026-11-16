@@ -121,8 +121,8 @@ class Motor:
         lineas = [f"{ICONO.get(o.categoria, o.categoria.upper())} · {motivo}",
                   f"<b>{escape(o.modelo or '')}</b>" + (f" — {escape(o.variante)}" if o.variante else "")]
         precio = f"💰 <b>{plata(o.precio, o.moneda)}</b>"
-        if o.pais == "AR" and o.tipo_precio == "transferencia":
-            precio += " transferencia"
+        if o.pais == "AR" and o.tipo_precio in ("transferencia", "contado"):
+            precio += f" {o.tipo_precio}"
             if o.precio_lista:
                 precio += f" · lista {plata(o.precio_lista, o.moneda)}"
         precio += f" en {escape(tienda)} {BANDERA.get(o.pais, '')}"

@@ -1,0 +1,56 @@
+[
+ {
+  "id": 1024041,
+  "name": "VIDEO GEFORCE RTX 3060 12GB GIGABYTE GAMING OC",
+  "permalink": "https://katech.com.ar/producto/video-geforce-rtx-3060-12gb-gigabyte-gaming-oc/",
+  "sku": "RTX124",
+  "prices": {
+   "price": "99232000",
+   "regular_price": "99232000",
+   "sale_price": "99232000",
+   "currency_code": "ARS",
+   "currency_minor_unit": 2
+  },
+  "is_in_stock": true,
+  "stock_availability": {
+   "text": "Disponible en 24/48hs hábiles para retiro/despacho",
+   "class": "available-on-backorder"
+  }
+ },
+ {
+  "id": 1023884,
+  "name": "VIDEO GEFROCE RTX 5070 12GB INNO3D TWIN X2 OC",
+  "permalink": "https://katech.com.ar/producto/video-gefroce-rtx-5070-12gb-inno3d-twin-x2-oc/",
+  "sku": "RTX580",
+  "prices": {
+   "price": "158887400",
+   "regular_price": "177592000",
+   "sale_price": "158887400",
+   "currency_code": "ARS",
+   "currency_minor_unit": 2
+  },
+  "is_in_stock": true,
+  "stock_availability": {
+   "text": "Disponible en 24/48hs hábiles para retiro/despacho",
+   "class": "available-on-backorder"
+  }
+ },
+ {
+  "id": 1023795,
+  "name": "VIDEO GEFORCE RTX 3050 6GB GDDR6 INNO3D TWIN X2",
+  "permalink": "https://katech.com.ar/producto/video-geforce-rtx-3050-6gb-gddr6-inno3d-twin-x2/",
+  "sku": "RTX546",
+  "prices": {
+   "price": "54498000",
+   "regular_price": "54498000",
+   "sale_price": "54498000",
+   "currency_code": "ARS",
+   "currency_minor_unit": 2
+  },
+  "is_in_stock": false,
+  "stock_availability": {
+   "text": "Sin Stock  ",
+   "class": "out-of-stock"
+  }
+ }
+]
