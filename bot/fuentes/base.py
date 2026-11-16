@@ -30,6 +30,7 @@ class Tienda:
     web: str = ""
     # categoría -> lista de URLs de listado (página 1)
     categorias: dict[str, list[str]] = {}
+    servidor: str = ""        # tiendas con el mismo servidor no se leen en el mismo turno
     max_paginas: int = 15
     pausa: tuple[float, float] = (3.0, 5.0)
 

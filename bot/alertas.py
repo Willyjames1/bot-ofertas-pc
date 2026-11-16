@@ -134,6 +134,10 @@ class Motor:
         lineas.append(f"📉 Mín. histórico: {plata(minimo, o.moneda)} · 🎯 Objetivo: {plata(objetivo, o.moneda)}")
         if o.tray:
             lineas.append("📦 Tray / sin caja")
+        if o.datos.get("via") == "staticICE":
+            fecha = o.datos.get("actualizado", "")
+            fecha = f"{fecha[8:10]}/{fecha[5:7]}" if len(fecha) == 10 else "?"
+            lineas.append(f"ℹ️ Precio visto en staticICE (actualizado el {fecha}): confirmá precio y stock en la tienda")
         if o.pais == "AU" and o.modelo:
             lineas.append(self._linea_conviene(o.modelo, o.precio))
         lineas.append(f'🔗 <a href="{escape(o.url)}">Ver en la tienda</a>')
@@ -141,7 +145,8 @@ class Motor:
 
     # -------------------------------------------------- ofertas de tiendas
     def evaluar_oferta(self, o: Oferta, info: dict) -> list[Aviso]:
-        if o.descartada or not o.modelo or not o.stock:
+        # stock None = la fuente no lo informa (staticICE): se evalúa igual y el aviso lo aclara
+        if o.descartada or not o.modelo or o.stock is False:
             return []
         if not pasa_filtros(self.cfg, o.categoria, o.modelo, o.datos, o.precio, o.moneda, o.tray, o.combo):
             return []
@@ -219,6 +224,8 @@ class Motor:
                     for bajo, rb in sorted(vencidos, key=lambda x: -x[1]["precio"])[:3]:
                         lineas.append(f"   • {escape(rb['modelo'])} a {plata(rb['precio'], m)} "
                                       f"({escape(NOMBRE_TIENDA.get(rb['tienda'], rb['tienda']))})")
+                    if json.loads(ra["datos"] or "{}").get("via") == "staticICE":
+                        lineas.append("ℹ️ Precio visto en staticICE: confirmá precio y stock en la tienda")
                     if pais == "AU":
                         lineas.append(self._linea_conviene(ra["modelo"], ra["precio"]))
                     lineas.append(f'🔗 <a href="{escape(ra["url"])}">Ver en la tienda</a>')

@@ -52,8 +52,8 @@ def cmd_probar(a):
                 continue
             total += 1
             extra = (f" lista {o.precio_lista:,.0f}" if o.precio_lista else "") + (" TRAY" if o.tray else "") + \
-                    ("" if o.stock else " SIN STOCK") + (" COMBO" if o.combo else "")
-            print(f"  {o.precio:>12,.0f} {o.moneda} | {o.modelo:<28} | {(o.variante or '')[:22]:<22} |{extra} {o.titulo[:60]}")
+                    (" SIN STOCK" if o.stock is False else "") + (" COMBO" if o.combo else "")
+            print(f"  {o.precio:>12,.0f} {o.moneda} | {(o.modelo or '(sin normalizar)'):<28} | {(o.variante or '')[:22]:<22} |{extra} {o.titulo[:60]}")
         if motivos:
             print("  Descartados: " + ", ".join(f"{k}: {v}" for k, v in motivos.most_common()))
     print(f"\nTotal válidos: {total} · pedidos HTTP: {t.cliente.pedidos}")
@@ -67,6 +67,10 @@ def cmd_tiendas(_a):
 
 
 def main(argv=None):
+    # la consola de Windows no es UTF-8 por defecto y los avisos llevan emojis
+    for flujo in (sys.stdout, sys.stderr):
+        if hasattr(flujo, "reconfigure"):
+            flujo.reconfigure(encoding="utf-8", errors="replace")
     p = argparse.ArgumentParser(prog="python -m bot")
     p.add_argument("-v", "--verbose", action="store_true")
     sp = p.add_subparsers(dest="cmd", required=True)

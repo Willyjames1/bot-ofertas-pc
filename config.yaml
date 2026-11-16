@@ -64,6 +64,8 @@ frecuencia:
   feeds_cada_min: 20
   tiendas_cada_min: 20
   turnos_tiendas: 2              # las tiendas se reparten en N grupos que se turnan
+  fase2_cada_horas: 6            # mothers, SSD, fuentes y refrigeración: se leen cada 6 h (todavía no avisan)
+  pausa_si_bloquea_horas: 2      # si una tienda nos frena (captcha, 429, 404 falso), descansa 2 h
 
 black_friday:
   desde: 2026-11-23

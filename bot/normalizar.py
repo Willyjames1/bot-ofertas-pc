@@ -29,7 +29,7 @@ USADO = _r(r"\b(USAD[OA]S?|REACONDICIONAD[OA]S?|REFURBISHED|REFURB|RENEWED|OPEN 
            r"REPARAD[OA]|DEMO UNIT)\b")
 NOTEBOOK = _r(r"\b(NOTEBOOK|LAPTOP|PORTATIL|NETBOOK|ULTRABOOK|CHROMEBOOK)\b")
 PC_ARMADA = _r(r"^(PC|COMPUTADORA|EQUIPO|CPU)\s+(GAMER|ARMAD|DE ESCRITORIO|COMPLET)|"
-               r"\b(PC ARMADA|EQUIPO ARMADO|GAMING PC|GAMING DESKTOP|DESKTOP PC|PRE-?BUILT|"
+               r"\b(PC ARMADA|EQUIPO ARMADO|GAMING PC|GAMING DESKTOP|DESKTOP PC(?! COMPUTER| RAM| MEMORY)|PRE-?BUILT|"
                r"MINI PC|ALL[- ]IN[- ]ONE PC|PC GAMER (AMD|INTEL|RYZEN|CORE))\b")
 COMBO = _r(r"\b(COMBO|BUNDLE KIT|KIT (DE )?ACTUALIZACION|UPGRADE KIT|KIT UPGRADE)\b|"
            r"\s\+\s*(MOTHER|MOTHERBOARD|PLACA MADRE|MEMORIA|RAM|PROCESADOR|MICRO|RYZEN|CORE|CPU|"
@@ -50,7 +50,8 @@ ACCESORIO_GPU = _r(r"\b(WATER ?BLOCK|WATERBLOCK|SOPORTE|HOLDER|BRACKET|RISER|CAB
 RE_NVIDIA = _r(r"\bRTX\s*-?\s*(\d{4})\s*(TI\s*SUPER|TI|SUPER)?(?![A-Z0-9])")
 RE_NVIDIA_PEGADO = _r(r"\bRTX\s*-?\s*(\d{4})(TI|S)?(?=[-\s/]|$)")
 RE_AMD = _r(r"\bRX\s*-?\s*(\d{4})\s*(XTX|XT|GRE)?(?![A-Z0-9])")
-RE_VRAM = _r(r"(?<![\dX.])(\d{1,2})\s*G(?:B)?(?![A-Z0-9])")
+# (?<!\d-): no tomar el final de un SKU como VRAM (Sapphire "11350-02-20G" es una 16GB)
+RE_VRAM = _r(r"(?<![\dX.])(?<!\d-)(\d{1,2})\s*G(?:B)?(?![A-Z0-9])")
 RE_LARGO = _r(r"(\d{3})\s?MM\b")
 VRAM_VALIDAS = {4, 6, 8, 10, 12, 16, 20, 24, 32}
 
@@ -171,6 +172,9 @@ def parsear_placa(o: Oferta, t: str) -> None:
         o.descartada = f"generación vieja ({chip})"
         return
     vram = vram_de(t) or VRAM_POR_DEFECTO.get(chip)
+    # "RX 9070 12GB GRE", "RX 9070 Reaper GRE": el GRE viene suelto. Toda RX 9070 de 12GB es GRE.
+    if chip == "RX 9070" and (_palabra("GRE", t) or vram == 12):
+        chip, vram = "RX 9070 GRE", 12
     marca = marca_gpu(t)
     linea = linea_gpu(t, marca)
     largo = None
@@ -188,6 +192,8 @@ RE_RYZEN = _r(r"\bRYZEN\s*([3579])?\s*(?:PRO\s*)?([789]\d{3})\s*(X3D2|X3D|X|F|G|
 RE_RYZEN_SUELTO = _r(r"(?<![A-Z0-9])([789]\d{3})(X3D2|X3D|X|F|G)(?![A-Z0-9])")
 RE_RYZEN_VIEJO = _r(r"\bRYZEN\s*[3579]?\s*[1-5]\d{3}")
 RE_ULTRA = _r(r"\bULTRA\s*([579])\s*-?\s*(2\d{2})\s*(KF|K|F|T)?(?:\s*PLUS)?(?![A-Z0-9])")
+# "Core Ultra 5 14 Core LGA 1851 245K": el número de modelo aparece más adelante
+RE_ULTRA_LEJOS = _r(r"\bULTRA\s*([579])\b.{0,30}?(?<![\d.])(2\d{2})\s*(KF|K|F|T)?(?![A-Z0-9.])")
 RE_ULTRA_PLUS = _r(r"\bULTRA\s*[579]\s*-?\s*2\d{2}\s*(?:KF|K|F|T)?\s*PLUS\b")
 RE_I14 = _r(r"\bI([3579])\s*-?\s*(14\d{2}0)\s*(KS|KF|K|F|T)?(?![A-Z0-9])")
 RE_INTEL_VIEJO = _r(r"\bI[3579]\s*-?\s*(1[0-3]\d{3}|[2-9]\d{3})")
@@ -227,7 +233,7 @@ def parsear_cpu(o: Oferta, t: str) -> None:
         o.modelo = modelo
         o.datos = {"marca": "AMD", "socket": "AM5", "nucleos": nucleos, "x3d": suf.startswith("X3D"),
                    "familia": f"Ryzen {num[0]}000"}
-    elif (m := RE_ULTRA.search(t)):
+    elif (m := RE_ULTRA.search(t) or RE_ULTRA_LEJOS.search(t)):
         tier, num, suf = m.group(1), m.group(2), m.group(3) or ""
         plus = " Plus" if RE_ULTRA_PLUS.search(t) else ""
         o.modelo = f"Core Ultra {tier} {num}{suf}{plus}"
@@ -323,7 +329,7 @@ def parsear_ram(o: Oferta, t: str) -> None:
         return
     marca = next((m_ for tok, m_ in MARCAS_RAM if _palabra(tok, t)), None)
     per = total // mods if mods else None
-    partes = [f"DDR5 {total}GB", f"({mods}x{per})" if mods and mods > 1 else "(1x)"]
+    partes = [f"DDR5 {total}GB", f"({mods}x{per})" if mods and mods > 1 else f"(1x{total})"]
     if vel:
         partes.append(str(vel))
     if cl:
@@ -340,6 +346,7 @@ PARSERS = {"placas": parsear_placa, "cpu": parsear_cpu, "ram": parsear_ram}
 
 
 def normalizar(o: Oferta) -> Oferta:
+    extra = dict(o.datos)  # lo que trajo la tienda (fecha de actualización, estado de stock...)
     t = limpiar(o.titulo)
     o.tray = bool(TRAY.search(t))
     o.combo = bool(COMBO.search(t))
@@ -353,6 +360,7 @@ def normalizar(o: Oferta) -> Oferta:
         p(o, t)
     else:
         o.modelo = None  # categorías de Fase 2: se guardan sin normalizar todavía
+    o.datos = {**extra, **o.datos}
     if o.datos.get("capacidad_gb") and o.precio:
         o.datos["precio_por_gb"] = round(o.precio / o.datos["capacidad_gb"], 2)
     return o

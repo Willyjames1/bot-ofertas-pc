@@ -79,6 +79,8 @@ def ajustes(cfg: dict, ahora: datetime | None = None) -> dict:
     efectivo.setdefault("feeds_cada_min", 20)
     efectivo.setdefault("tiendas_cada_min", 20)
     efectivo.setdefault("turnos_tiendas", 2)
+    efectivo.setdefault("fase2_cada_horas", 6)
+    efectivo.setdefault("pausa_si_bloquea_horas", 2)
     efectivo.setdefault("votos_ozbargain_urgente", 25)
     efectivo.setdefault("tope_alertas_que_suenan_por_dia", 6)
     efectivo.setdefault("re_aviso_baja_pct", 3)

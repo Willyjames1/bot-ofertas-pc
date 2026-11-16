@@ -94,7 +94,7 @@ def test_cpu_tray_y_vieja():
     ("MEMORIA RAM PATRIOT VIPER ELITE 5 RGB 32GB (2X16GB) DDR5 6600MHZ CL36", "DDR5 32GB (2x16) 6600 CL36", 2, 6600, 36),
     ("MEMORIA NETAC SHADOW III DDR5 4800 32GB C40 BLACK (16GBX2)", "DDR5 32GB (2x16) 4800 CL40", 2, 4800, 40),
     ("MEMORIA DDR5 32GB (2*16) 4800MHZ CORSAIR VENGEANCE LPX", "DDR5 32GB (2x16) 4800", 2, 4800, None),
-    ("MEMORIA RAM LEXAR 32GB 5600MHZ DDR5 CL46 BLACK", "DDR5 32GB (1x) 5600 CL46", 1, 5600, 46),
+    ("MEMORIA RAM LEXAR 32GB 5600MHZ DDR5 CL46 BLACK", "DDR5 32GB (1x32) 5600 CL46", 1, 5600, 46),
     # Australia, con SKU
     ("G.Skill F5-6000J3040G32GX2-RS5K Ripjaws S5 64GB (2x 32GB) DDR5 6000MHz", "DDR5 64GB (2x32) 6000 CL30", 2, 6000, 30),
     ("Kingston KF556C36BBEAK2-64 FURY Beast Black DDR5 64GB (2x32GB) 5600MHz", "DDR5 64GB (2x32) 5600 CL36", 2, 5600, 36),
@@ -130,3 +130,24 @@ def test_chip_config():
     assert parsear_chip_config("RTX 5060 Ti 16GB") == ("RTX 5060 Ti", 16)
     assert parsear_chip_config("RX 9070 XT") == ("RX 9070 XT", None)
     assert parsear_chip_config("RX 9060 XT 16GB") == ("RX 9060 XT", 16)
+
+
+def test_casos_vistos_en_umart_msy_y_staticice():
+    from bot.modelos import Oferta
+    from bot.normalizar import normalizar
+
+    def n(cat, t):
+        return normalizar(Oferta("x", "AU", cat, t, "u", 1, "AUD"))
+    # el "-20G" del SKU de Sapphire no es la VRAM
+    assert n("placas", "Sapphire 11350-02-20G PURE Radeon RX 9060XT Gaming OC 16GB").modelo == "RX 9060 XT 16GB"
+    # Core Ultra con el número de modelo más adelante
+    assert n("cpu", "Intel Core Ultra 5 14 Core LGA 1851 245K 5.20GHz CPU Processor").modelo == "Core Ultra 5 245K"
+    # "Desktop PC Computer RAM" es RAM, no una PC armada
+    r = n("ram", "SP Silicon Power XPOWER STORM RGB DDR5 32GB(2x16GB)6400MT/s CL32 UDIMM Desktop PC Computer RAM")
+    assert r.descartada is None and r.modelo == "DDR5 32GB (2x16) 6400 CL32"
+    assert n("placas", "MSI Gaming Desktop PC RTX 5070 Ryzen 7").descartada == "PC armada"
+    assert n("ram", "Crucial Pro 32GB (1x32GB) CP32G60C40U5B UDIMM 6000MHz CL40 DDR5").modelo == "DDR5 32GB (1x32) 6000 CL40"
+    for t in ["Sapphire PULSE AMD Radeon RX 9070 12GB GRE OC Graphic Card",
+              "PowerColor Radeon RX 9070 Reaper GRE 12GB GDDR6 [RX9070GRE-12G-A]"]:
+        assert n("placas", t).modelo == "RX 9070 GRE 12GB"
+    assert n("placas", "Sapphire Pulse Radeon RX 9070 16GB").modelo == "RX 9070 16GB"

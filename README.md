@@ -139,12 +139,30 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
    `POST https://api.github.com/repos/<usuario>/<repo>/actions/workflows/bot.yml/dispatches`
    con el cuerpo `{"ref":"main"}`.
 
+## Tiendas conectadas
+
+| Tienda | País | Cómo se lee | Notas |
+|---|---|---|---|
+| Umart | 🇦🇺 | listados por categoría (`?page=N`) | misma empresa y servidor que MSY: van en turnos distintos y con pausas de 6–9 s |
+| MSY | 🇦🇺 | igual que Umart | si reciben muchos pedidos contestan "404" a todo: el bot lo toma como freno y las deja 2 h en pausa |
+| staticICE | 🇦🇺 | búsquedas armadas desde `config.yaml` | cubre PC Case Gear, Scorptec, Mwave, PLE, JW, CCPU, Computer Alliance, MegaBuy, I-Tech y más. No informa stock: el aviso lo aclara. Saltea filas sin actualizar hace más de 3 días y tiendas con precios viejos (ver abajo) |
+
+- **Categorías de la Fase 2** (mothers, SSD, fuentes, refrigeración): se guardan pero todavía no
+  avisan. Se leen cada 6 h y de a una por corrida, para no cargar a las tiendas.
+- **Precios viejos en staticICE**: algunas tiendas le pasan precios desactualizados (en RAM,
+  Computer & Parts Land y Austin aparecían a la mitad de lo que cobra el resto). Si la mitad o más
+  de los productos de una tienda están por debajo del 75% de lo que cobran las demás por el mismo
+  modelo, esa tienda no se usa en esa categoría (queda en el log).
+- `robots.txt` se respeta con comodines (`Disallow: /*sort=*`), cosa que el lector de Python no hace.
+
 ## Fuentes que no se pueden leer
 
 | Fuente | Estado | Motivo |
 |---|---|---|
 | PC Case Gear, Scorptec | bloqueadas | Cloudflare pide verificación. Se cubren con staticICE y OzBargain |
 | Centre Com | bloqueada | AWS WAF "Human Verification" |
+| Mwave (directo) | 429 | Shopify contesta "demasiados pedidos" aun con 1 pedido cada 15 min. Se cubre con staticICE |
+| Computer & Parts Land (directo) | bloqueada | Cloudflare. Sus precios en staticICE se filtran si están desfasados |
 | Reddit | fuera de la Fase 1 | RSS cortado el 13/11/2026, API sin acceso nuevo desde el 31/10/2026 y `robots.txt` con `Disallow: /` |
 | Mercado Libre | Fase 3 | la API pide token OAuth (sin token: 403) |
 | Twitter/X | no | la API cobra por post leído |
