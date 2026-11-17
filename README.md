@@ -179,7 +179,8 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
    `https://api.telegram.org/bot<TOKEN>/getUpdates`; el número en `"chat":{"id": ...}` es tu chat_id.
 3. **GitHub**: repo público, subir este código, y en *Settings → Secrets and variables → Actions*
    cargar `TELEGRAM_TOKEN` y `TELEGRAM_CHAT_ID_YO`.
-4. **cron-job.org** (para que corra puntual): un token de GitHub *fine-grained* con permiso
+4. **cron-job.org** (ya configurado; es lo que hace correr al bot puntual, y el `schedule` de GitHub
+   queda de respaldo cada 30 min): un token de GitHub *fine-grained* con permiso
    *Actions: read and write* solo sobre este repo, y un cron cada 10 minutos que haga
    `POST https://api.github.com/repos/<usuario>/<repo>/actions/workflows/bot.yml/dispatches`
    con el cuerpo `{"ref":"main"}`.

@@ -1,10 +1,11 @@
 name: bot de ofertas
 
 on:
-  # Respaldo: GitHub lo corre "más o menos" cada 10 min (a veces se atrasa).
-  # El disparo puntual lo hace cron-job.org con workflow_dispatch.
+  # El disparo principal lo hace cron-job.org (workflow_dispatch cada 10 min).
+  # Esto es solo un respaldo, cada 30 min en los minutos 5 y 35 para no caer junto con
+  # cron-job.org (GitHub igual suele atrasarse o saltearse corridas programadas).
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "5,35 * * * *"
   workflow_dispatch:
 
 # Nunca dos corridas a la vez (se pisarían la base)
