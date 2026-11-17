@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from html import escape
@@ -21,7 +22,8 @@ from .telegram import Telegram
 log = logging.getLogger("bot.alertas")
 
 ICONO = {"placas": "🎮 PLACA", "cpu": "🧠 CPU", "ram": "💾 RAM", "mothers": "🔌 MOTHER",
-         "ssd": "💽 SSD", "fuentes": "⚡ FUENTE", "refrigeracion": "❄️ REFRIGERACIÓN"}
+         "ssd": "💽 SSD", "fuentes": "⚡ FUENTE", "refrigeracion": "❄️ REFRIGERACIÓN",
+         "pcs": "🖥️ PC ARMADA"}
 BANDERA = {"AU": "🇦🇺", "AR": "🇦🇷"}
 NOMBRE_TIENDA: dict[str, str] = {}  # lo completa corrida.py con los nombres lindos
 
@@ -42,6 +44,55 @@ def plata(x: float | None, moneda: str) -> str:
     return ("A$" + f"{x:,.0f}".replace(",", ".")) if moneda == "AUD" else ars(x)
 
 
+def bajo_objetivo(precio: float, objetivo: float | None, moneda: str) -> str:
+    """'🎯 Objetivo: A$1.450 · 6% abajo (A$90 menos)'."""
+    if not objetivo or precio > objetivo:
+        return f"🎯 Objetivo: {plata(objetivo, moneda)}"
+    return (f"🎯 Objetivo: {plata(objetivo, moneda)} · <b>{(1 - precio / objetivo) * 100:.0f}% abajo</b> "
+            f"({plata(objetivo - precio, moneda)} menos)")
+
+
+RE_OBJ_RAM = re.compile(r"(\d+)\s*GB(?:\s*\(\s*(\d+)\s*x\s*(\d+)\s*(?:GB)?\s*\))?(?:\s+(\d{4}))?", re.I)
+
+
+def ram_cumple(nombre: str, datos: dict) -> bool:
+    """'32GB (2x16) 6000': capacidad exacta, módulos si se ponen, velocidad como mínimo."""
+    m = RE_OBJ_RAM.fullmatch(nombre.strip())
+    if not m:
+        return False
+    total, mods, per, vel = (int(x) if x else None for x in m.groups())
+    if datos.get("capacidad_gb") != total:
+        return False
+    if mods and (datos.get("modulos") != mods or (per and mods * per != total)):
+        return False
+    return not vel or (datos.get("velocidad") or 0) >= vel
+
+
+def gpu_alcanza(cfg_pcs: dict, datos: dict) -> bool:
+    """¿La placa de la PC es gpu_min o mejor, según el orden de perf.yaml?"""
+    minimo = cfg_pcs.get("gpu_min")
+    if not minimo:
+        return True
+    chip = datos.get("chip")
+    if not chip or (minimo.upper().startswith("RTX") and not chip.startswith("RTX")):
+        return False
+    tabla = perf.orden().get("placas", {})
+
+    def nivel(c: str) -> int | None:  # "RTX 4060 Ti" está como "rtx 4060 ti 8gb" y "rtx 4060 ti 16gb"
+        return max((v for k, v in tabla.items() if k == canon(c) or k.startswith(canon(c) + " ")
+                    and k[len(canon(c)) + 1:].endswith("gb")), default=None)
+    a, b = nivel(chip), nivel(minimo)
+    return a is not None and b is not None and a >= b
+
+
+def es_marketplace(cfg: dict, p: Post) -> bool:
+    """Posts de eBay, Catch, MyDeal...: por el link de la tienda o por el '@ Tienda' del título."""
+    nombres = [x.lower() for x in (cfg.get("general") or {}).get("marketplaces") or []]
+    host = (p.url_tienda or "").lower()
+    titulo = p.titulo.lower()
+    return any(n in host or f"@ {n}" in titulo or (" " in n and n in titulo) for n in nombres)
+
+
 # ------------------------------------------------------------------ filtros
 
 def pasa_filtros(cfg: dict, categoria: str, modelo: str | None, datos: dict, precio: float | None,
@@ -57,6 +108,8 @@ def pasa_filtros(cfg: dict, categoria: str, modelo: str | None, datos: dict, pre
     pmax = (c.get("precio_max") or {}).get(moneda)
     if pmax and precio and precio > pmax:
         return False
+    if categoria == "pcs":
+        return gpu_alcanza(c, datos)
     if categoria == "placas":
         chips = [parsear_chip_config(x) for x in c.get("chips", [])]
         if chips and not any(ch == datos.get("chip") and (v is None or v == datos.get("vram"))
@@ -84,6 +137,9 @@ def pasa_filtros(cfg: dict, categoria: str, modelo: str | None, datos: dict, pre
 
 
 def objetivo_de(cfg: dict, categoria: str, modelo: str, datos: dict, moneda: str) -> float | None:
+    if categoria == "pcs":
+        obj = ((cfg.get("pcs") or {}).get("objetivo") or {}).get(moneda)
+        return float(obj) if obj else None
     objetivos = (cfg.get(categoria) or {}).get("objetivos") or {}
     for nombre, precios in objetivos.items():
         if not isinstance(precios, dict) or moneda not in precios:
@@ -93,7 +149,7 @@ def objetivo_de(cfg: dict, categoria: str, modelo: str, datos: dict, moneda: str
             if ch == datos.get("chip") and (v is None or v == datos.get("vram")):
                 return float(precios[moneda])
         elif categoria == "ram":
-            if canon(nombre) == canon(f"{datos.get('capacidad_gb')}GB"):
+            if ram_cumple(str(nombre), datos):
                 return float(precios[moneda])
         elif canon(nombre) == canon(modelo):
             return float(precios[moneda])
@@ -120,6 +176,8 @@ class Motor:
         tienda = NOMBRE_TIENDA.get(o.tienda, o.tienda)
         lineas = [f"{ICONO.get(o.categoria, o.categoria.upper())} · {motivo}",
                   f"<b>{escape(o.modelo or '')}</b>" + (f" — {escape(o.variante)}" if o.variante else "")]
+        if o.categoria == "pcs":
+            lineas.append(f"📝 {escape(o.titulo)}")
         precio = f"💰 <b>{plata(o.precio, o.moneda)}</b>"
         if o.pais == "AR" and o.tipo_precio in ("transferencia", "contado"):
             precio += f" {o.tipo_precio}"
@@ -131,14 +189,17 @@ class Motor:
         lineas.append(precio)
         if o.cuotas:
             lineas.append(f"💳 {escape(o.cuotas)}")
-        lineas.append(f"📉 Mín. histórico: {plata(minimo, o.moneda)} · 🎯 Objetivo: {plata(objetivo, o.moneda)}")
+        if o.categoria == "pcs":
+            lineas.append(bajo_objetivo(o.precio, objetivo, o.moneda))
+        else:
+            lineas.append(f"📉 Mín. histórico: {plata(minimo, o.moneda)} · {bajo_objetivo(o.precio, objetivo, o.moneda)}")
         if o.tray:
             lineas.append("📦 Tray / sin caja")
         if o.datos.get("via") == "staticICE":
             fecha = o.datos.get("actualizado", "")
             fecha = f"{fecha[8:10]}/{fecha[5:7]}" if len(fecha) == 10 else "?"
             lineas.append(f"ℹ️ Precio visto en staticICE (actualizado el {fecha}): confirmá precio y stock en la tienda")
-        if o.pais == "AU" and o.modelo:
+        if o.pais == "AU" and o.modelo and o.categoria != "pcs":
             lineas.append(self._linea_conviene(o.modelo, o.precio))
         lineas.append(f'🔗 <a href="{escape(o.url)}">Ver en la tienda</a>')
         return "\n".join(lineas)
@@ -150,6 +211,8 @@ class Motor:
             return []
         if not pasa_filtros(self.cfg, o.categoria, o.modelo, o.datos, o.precio, o.moneda, o.tray, o.combo):
             return []
+        if o.categoria == "pcs":
+            return self._evaluar_pc(o, info)
         mediana = self.db.mediana(o.modelo, o.pais)
         if mediana and o.precio <= mediana * (1 - self.aj["sospechoso_vs_mediana_pct"] / 100):
             self.db.marcar_sospechoso(info["id"], True)
@@ -190,6 +253,19 @@ class Motor:
                                 f"{resumen} ({(1 - o.precio / mediana) * 100:.0f}% bajo la mediana)",
                                 o.pais, o.precio))
         return [a for a in avisos if not self.db.ultima_alerta(a.clave)]
+
+    def _evaluar_pc(self, o: Oferta, info: dict) -> list[Aviso]:
+        """PCs armadas: cada una es distinta (CPU, RAM, disco), así que no hay mediana ni mínimo
+        histórico por modelo. Solo el objetivo, y la clave es el producto (su link)."""
+        objetivo = objetivo_de(self.cfg, "pcs", o.modelo, o.datos, o.moneda)
+        if not objetivo or o.precio > objetivo:
+            return []
+        clave = f"precio|{o.tienda}|{o.url}"
+        ult = self.db.ultima_alerta(clave)
+        if ult is not None and ult["precio"] and o.precio > ult["precio"] * (1 - self.aj["re_aviso_baja_pct"] / 100):
+            return []
+        texto = self.texto_oferta("🎯 <b>Bajo tu objetivo</b>", o, info.get("precio_antes"), None, objetivo)
+        return [Aviso("objetivo", clave, True, texto, o.pais, o.precio)]
 
     # -------------------------------------------------- oportunidades
     def evaluar_oportunidades(self) -> list[Aviso]:
@@ -240,6 +316,9 @@ class Motor:
         if not ok:  # expirado, agotado o viejo: ni alerta ni resumen
             log.debug("Ignoro post %s: %s", p.id, motivo_no)
             return []
+        if es_marketplace(self.cfg, p):
+            log.debug("Ignoro post %s: marketplace", p.id)
+            return []
         en_filtros = [o for o in modelos if pasa_filtros(self.cfg, o.categoria, o.modelo, o.datos,
                                                          p.precio, "AUD", o.tray, o.combo)]
         if not en_filtros:
@@ -251,6 +330,8 @@ class Motor:
         motivo = None
         if p.precio and objetivo and p.precio <= objetivo:
             motivo = "🎯 <b>Bajo tu objetivo</b>"
+        elif o.categoria == "pcs":
+            motivo = None  # PCs armadas: solo por precio, no por votos
         elif p.fuente == "ozbargain" and p.votos is not None and p.votos >= umbral and edad <= timedelta(hours=1):
             motivo = f"🔥 <b>{p.votos} votos en {int(edad.total_seconds() // 60)} min</b>"
         fuente = "OzBargain" if p.fuente == "ozbargain" else "Reddit"
@@ -263,8 +344,10 @@ class Motor:
             if p.expira:
                 lineas.append(f"⌛ Vence: {p.expira.astimezone(TZ_AR):%d/%m %H:%M} hora argentina")
             if p.precio:
-                lineas.append(f"💰 {plata(p.precio, 'AUD')} · 🎯 Objetivo: {plata(objetivo, 'AUD')}")
-                lineas.append(self._linea_conviene(o.modelo, p.precio))
+                tienda = f" en {escape(p.titulo.rsplit(' @ ', 1)[1])}" if " @ " in p.titulo else ""
+                lineas.append(f"💰 <b>{plata(p.precio, 'AUD')}</b>{tienda} · {bajo_objetivo(p.precio, objetivo, 'AUD')}")
+                if o.categoria != "pcs":
+                    lineas.append(self._linea_conviene(o.modelo, p.precio))
             lineas.append(f'🔗 <a href="{escape(p.url)}">Ver el post</a>')
             return [Aviso("ozbargain" if p.fuente == "ozbargain" else "post_urgente",
                           f"post|{p.fuente}|{p.id}", True, "\n".join(lineas), "AU", p.precio)]

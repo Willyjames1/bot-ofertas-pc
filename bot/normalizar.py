@@ -347,9 +347,22 @@ def parsear_ram(o: Oferta, t: str) -> None:
                "expo": "EXPO" in t, "xmp": "XMP" in t, "tipo": "DDR5"}
 
 
+# ---------------------------------------------------------------- PCs armadas
+
+def parsear_pc(o: Oferta, t: str) -> None:
+    """Una PC armada se identifica por su placa de video: modelo "PC RTX 5070 Ti".
+    Si la tienda leyó la placa aparte (Mexx corta el nombre), manda esa."""
+    chip = chip_gpu(limpiar(o.datos.get("placa") or "")) or chip_gpu(t)
+    if not chip:
+        o.descartada = "PC sin placa de video reconocible"
+        return
+    o.modelo = f"PC {chip}"
+    o.datos = {"chip": chip, "fabricante": "NVIDIA" if chip.startswith("RTX") else "AMD"}
+
+
 # ---------------------------------------------------------------- entrada principal
 
-PARSERS = {"placas": parsear_placa, "cpu": parsear_cpu, "ram": parsear_ram}
+PARSERS = {"placas": parsear_placa, "cpu": parsear_cpu, "ram": parsear_ram, "pcs": parsear_pc}
 
 
 def normalizar(o: Oferta) -> Oferta:
@@ -361,7 +374,7 @@ def normalizar(o: Oferta) -> Oferta:
         o.descartada = "usado/reacondicionado"
     elif NOTEBOOK.search(t):
         o.descartada = "notebook"
-    elif PC_ARMADA.search(t):
+    elif o.categoria != "pcs" and PC_ARMADA.search(t):
         o.descartada = "PC armada"
     elif (p := PARSERS.get(o.categoria)):
         p(o, t)

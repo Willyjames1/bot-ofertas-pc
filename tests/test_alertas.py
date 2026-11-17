@@ -44,7 +44,7 @@ def test_filtros_ram_y_cpu():
 
 def test_objetivos():
     o = oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1400)
-    assert objetivo_de(CFG, "placas", o.modelo, o.datos, "AUD") == 1500
+    assert objetivo_de(CFG, "placas", o.modelo, o.datos, "AUD") == 1450
     r = oferta("Kingston FURY 64GB (2x32GB) DDR5 6000MHz CL30", 500, cat="ram")
     assert objetivo_de(CFG, "ram", r.modelo, r.datos, "ARS") == 1800000
     c = oferta("AMD Ryzen 9 9950X3D AM5", 850, cat="cpu")

@@ -10,17 +10,20 @@ from .db import DB
 
 def filtros_texto(cfg: dict) -> str:
     lineas = ["⚙️ <b>Filtros activos</b>"]
-    for cat in ("placas", "cpu", "ram", "mothers", "ssd", "fuentes", "refrigeracion", "gabinetes", "monitores"):
+    for cat in ("placas", "cpu", "ram", "pcs", "mothers", "ssd", "fuentes", "refrigeracion", "gabinetes", "monitores"):
         c = cfg.get(cat) or {}
         if not c.get("activo"):
             continue
         partes = []
         for k, v in c.items():
-            if k in ("activo", "objetivos"):
+            if k in ("activo", "objetivos", "objetivo"):
                 continue
             partes.append(f"{k}: {v}")
         lineas.append(f"\n<b>{cat}</b>: " + escape("; ".join(partes)))
-        for mod, precios in (c.get("objetivos") or {}).items():
+        objetivos = dict(c.get("objetivos") or {})
+        if c.get("objetivo"):
+            objetivos[f"{c.get('gpu_min', '')} o superior".strip()] = c["objetivo"]
+        for mod, precios in objetivos.items():
             lineas.append(f"   🎯 {escape(str(mod))}: " + escape(", ".join(f"{m} {p:,}" for m, p in precios.items())))
     return "\n".join(lineas)
 

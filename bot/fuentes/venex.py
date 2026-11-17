@@ -25,8 +25,12 @@ class Venex(Tienda):
         "placas": ["https://www.venex.com.ar/componentes-de-pc/placas-de-video"],
         "cpu": ["https://www.venex.com.ar/componentes-de-pc/microprocesadores"],
         "ram": ["https://www.venex.com.ar/componentes-de-pc/memorias-ram/desktop"],
+        # "hogar y oficina" no trae placa de video: no se lee
+        "pcs": ["https://www.venex.com.ar/pc-de-escritorio/gamer",
+                "https://www.venex.com.ar/pc-de-escritorio/agent-computer"],
     }
     max_paginas = 25
+    timeout = 60.0  # las páginas de PCs tardan ~20 s en salir
 
     def leer_pagina(self, url: str, categoria: str) -> tuple[list[Oferta], str | None]:
         return self.parsear(self.cliente.get(url).text, categoria)

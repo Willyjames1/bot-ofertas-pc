@@ -21,6 +21,7 @@ class Gezatek(Tienda):
         "placas": ["https://gezatek.com.ar/placas-de-video/"],
         "cpu": ["https://gezatek.com.ar/procesadores/"],
         "ram": ["https://gezatek.com.ar/memorias-ram/memoria-ram-ddr5/"],
+        "pcs": ["https://gezatek.com.ar/pc-armadas/"],
     }
 
     def leer_pagina(self, url: str, categoria: str) -> tuple[list[Oferta], str | None]:

@@ -33,9 +33,10 @@ class Tienda:
     servidor: str = ""        # tiendas con el mismo servidor no se leen en el mismo turno
     max_paginas: int = 15
     pausa: tuple[float, float] = (3.0, 5.0)
+    timeout: float = 25.0
 
     def __init__(self, cliente: Cliente | None = None):
-        self.cliente = cliente or Cliente(pausa=self.pausa)
+        self.cliente = cliente or Cliente(pausa=self.pausa, timeout=self.timeout)
 
     # Cada tienda implementa esto: recibe la URL de una página y devuelve
     # (ofertas, url_siguiente_o_None).

@@ -16,6 +16,7 @@ SUBCATEGORIAS = {
     "placas": {6, 62, 116},      # GeForce, Radeon, Intel Arc
     "cpu": {27, 48},             # AMD, Intel (el 103 es "Procesadores Outlet": no)
     "ram": {15},                 # Memorias (las de notebook son la 47)
+    "pcs": {30},                 # PC de Escritorio (las gamer se arman en "Armá tu PC": no son productos)
     "mothers": {26, 49},
     "ssd": {81},
     "fuentes": {34},

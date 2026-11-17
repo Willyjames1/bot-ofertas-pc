@@ -20,7 +20,7 @@ lee OzBargain y me avisa **solo** de lo que pasa mis filtros de `config.yaml`.
 bot/
   config.py        carga config.yaml, .env y el modo Black Friday
   modelos.py       Oferta y Post
-  normalizar.py    título → modelo canónico; descarta usados, notebooks, PCs armadas
+  normalizar.py    título → modelo canónico; descarta usados y notebooks; PCs armadas por su placa
   fuentes/         un archivo por tienda, todos con la misma interfaz (base.py)
   feeds.py         OzBargain por RSS (ignora expirados, agotados y posts de más de 7 días)
   cotizaciones.py  MEP (dolarapi.com) y AUD/USD (frankfurter) + cálculo de "conviene"
@@ -77,8 +77,26 @@ Editá `config.yaml`. Cada categoría tiene `activo`, sus condiciones (`chips`, 
 ```yaml
 placas:
   objetivos:
-    RTX 5070 Ti: {AUD: 1500, ARS: 2100000}   # suena si alguna tienda lo pone a ese precio o menos
+    RTX 5070 Ti: {AUD: 1450, ARS: 2100000}   # suena si alguna tienda lo pone a ese precio o menos
+ram:
+  objetivos:
+    32GB (2x16) 6000: {AUD: 550, ARS: 750000} # capacidad, módulos y velocidad mínima
+pcs:
+  gpu_min: RTX 5070 Ti                        # esa placa o mejor (orden de perf.yaml)
+  objetivo: {AUD: 3000, ARS: 4000000}
 ```
+
+Cada aviso trae producto, precio, tienda, link y cuánto está por debajo del objetivo. Avisa una vez
+por tienda y modelo (en PCs, por producto) y vuelve a avisar solo si baja otro 3% (`re_aviso_baja_pct`).
+El objetivo solo suena si el producto además pasa los filtros de su categoría (por ejemplo `cl_max`
+en RAM). Usados y reacondicionados se descartan siempre, y los posts de `marketplaces` (eBay,
+Catch, MyDeal...) no avisan.
+
+**PCs armadas**: en Australia salen de OzBargain (posts con `palabras_ozbargain`; "desktop" solo
+cuenta si el título trae una placa y no es "Desktop Processor/RAM"). En Argentina, de las secciones de
+PCs de Venex, Gezatek, Mexx y Compra Gamer (esta última solo vende PCs de oficina; las gamer se arman
+en "Armá tu PC"). Mexx corta los nombres, así que la placa se lee de la ficha, solo de las PCs que
+cuestan menos que el objetivo (hasta 8 por corrida).
 
 Los precios argentinos se comparan con el de **transferencia/contado**; los australianos incluyen GST.
 En `general` están el tope de alertas por día, el silencio nocturno (00 a 08 hora argentina: llegan

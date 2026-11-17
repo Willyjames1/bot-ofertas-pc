@@ -92,7 +92,8 @@ def staticice():
 def test_staticice_busquedas_salen_de_config():
     q = busquedas(CFG, ["Ryzen 5 9600X", "Ryzen 7 9800X3D", "Ryzen 9 9950X3D"])
     assert q["placas"] == CFG["placas"]["chips"]
-    assert q["cpu"] == ["9800X3D", "9950X3D"]          # nucleos_min 8: el Ryzen 5 no se busca
+    # nucleos_min 8: el Ryzen 5 no se busca; los objetivos de CPU (9900X, 9950X) sí
+    assert q["cpu"] == ["9800X3D", "9950X3D", "9900X", "9950X"]
     assert q["ram"] == ["DDR5 32GB", "DDR5 64GB", "DDR5 96GB"]
 
 

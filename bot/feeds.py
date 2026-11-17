@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
 from .modelos import Oferta, Post
-from .normalizar import normalizar
+from .normalizar import PC_ARMADA, chip_gpu, limpiar, normalizar
 
 log = logging.getLogger("bot.feeds")
 NS_OZB = "{https://www.ozbargain.com.au}"
@@ -84,8 +84,32 @@ def vigente(p: Post, ahora: datetime | None = None, max_dias: int = MAX_DIAS_POS
     return True, None
 
 
-def modelos_del_post(p: Post) -> list[Oferta]:
-    """Prueba el título con cada parser (placa, CPU, RAM) y devuelve las coincidencias."""
+# "Desktop" suelto también aparece en "Desktop Processor" o "Desktop RAM": solo cuenta como PC
+# si el título trae una placa de video y no habla de un componente suelto.
+RE_COMPONENTE = re.compile(r"\bDESKTOP\s+(PROCESSOR|CPU|RAM|MEMORY|KIT|GRAPHICS|GPU|VIDEO)|"
+                           r"\b(GRAPHICS|VIDEO) CARD\b")
+
+
+def es_pc(titulo: str, palabras: list[str] | None) -> bool:
+    t = limpiar(titulo)
+    if PC_ARMADA.search(t):
+        return True
+    for palabra in palabras or []:
+        if re.search(r"(?<![A-Z0-9])" + re.escape(limpiar(palabra)) + r"(?![A-Z0-9])", t):
+            if " " in palabra.strip() or palabra.strip().lower() == "prebuilt":
+                return True  # "gaming PC", "prebuilt": no hay duda
+            if chip_gpu(t) and not RE_COMPONENTE.search(t):
+                return True
+    return False
+
+
+def modelos_del_post(p: Post, palabras_pc: list[str] | None = None) -> list[Oferta]:
+    """Prueba el título con cada parser (placa, CPU, RAM) y devuelve las coincidencias.
+    Si es una PC armada, la devuelve como tal (categoría "pcs") y no como sus componentes."""
+    if es_pc(p.titulo, palabras_pc):
+        o = normalizar(Oferta(tienda=p.fuente, pais="AU", categoria="pcs", titulo=p.titulo, url=p.url,
+                              precio=p.precio or 0, moneda="AUD"))
+        return [o] if o.modelo and not o.descartada else []
     salida = []
     for cat in ("placas", "cpu", "ram"):
         o = normalizar(Oferta(tienda=p.fuente, pais="AU", categoria=cat, titulo=p.titulo, url=p.url,

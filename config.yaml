@@ -13,9 +13,11 @@ placas:
   chips: [RTX 5060 Ti 16GB, RTX 5070, RTX 5070 Ti, RTX 5080, RX 9060 XT 16GB, RX 9070, RX 9070 XT]
   vram_min_gb: 12
   precio_max: {AUD: 2600, ARS: 3500000}
+  # objetivos: avisa (una vez por tienda y modelo, y de nuevo solo si baja otro 3%) cuando el
+  # precio queda por debajo. AUD con GST; ARS precio de transferencia/contado.
   objetivos:
-    RTX 5070 Ti: {AUD: 1500, ARS: 2100000}
-    RTX 5080: {AUD: 2400, ARS: 3000000}
+    RTX 5070 Ti: {AUD: 1450, ARS: 2100000}
+    RTX 5080: {AUD: 1900, ARS: 2800000}
     RX 9070 XT: {AUD: 950, ARS: 1400000}
 
 cpu:
@@ -23,6 +25,8 @@ cpu:
   socket: [AM5]
   nucleos_min: 8
   objetivos:
+    Ryzen 9 9900X: {AUD: 580, ARS: 650000}
+    Ryzen 9 9950X: {AUD: 800, ARS: 1000000}
     Ryzen 9 9950X3D: {AUD: 880, ARS: 1200000}
 
 ram:
@@ -32,8 +36,21 @@ ram:
   velocidad_min: 6000
   cl_max: 36
   modulos: 2
+  # objetivos de RAM: "capacidad (módulos x GB) velocidad". La velocidad es mínima (un kit 6400
+  # también cuenta para "6000"); lo que no se pone, no se exige.
   objetivos:
-    64GB: {AUD: 1300, ARS: 1800000}
+    32GB (2x16) 6000: {AUD: 550, ARS: 750000}
+    64GB (2x32): {AUD: 1100, ARS: 1800000}
+
+# PCs armadas. Australia: posts de OzBargain con alguna de las palabras de abajo. Argentina:
+# las secciones de PCs de las tiendas. Avisan solo si traen una placa gpu_min o superior
+# (según el orden de perf.yaml; con "RTX" cuentan solo las NVIDIA: 5070 Ti, 4080, 5080, 4090, 5090)
+# y el precio queda por debajo del objetivo.
+pcs:
+  activo: true
+  gpu_min: RTX 5070 Ti
+  objetivo: {AUD: 3000, ARS: 4000000}
+  palabras_ozbargain: [gaming PC, desktop, prebuilt]
 
 mothers: {activo: true, chipsets: [B850, X870, X870E], wifi: true}
 ssd: {activo: true, capacidad_tb: [2, 4], gen_min: 4}
@@ -51,6 +68,9 @@ general:
   aduana: false
   mostrar_tray: true
   combos: false
+  # posts de estos vendedores no avisan (marketplaces: vende cualquiera). Usados y
+  # reacondicionados ya se descartan siempre.
+  marketplaces: [ebay, catch.com.au, mydeal, kogan marketplace, amazon marketplace]
 
 # ------------------------------------------------------------
 #  Ajustes técnicos (normalmente no hace falta tocarlos)

@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-CATEGORIAS = ("placas", "cpu", "ram", "mothers", "ssd", "fuentes", "refrigeracion",
+CATEGORIAS = ("placas", "cpu", "ram", "pcs", "mothers", "ssd", "fuentes", "refrigeracion",
               "gabinetes", "monitores")
 
 

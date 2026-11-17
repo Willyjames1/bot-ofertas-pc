@@ -172,8 +172,10 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
                     db.registrar_tienda(fuente, False, 0, str(e), 0)
                     continue
                 db.registrar_tienda(fuente, True, len(posts), None, 0)
+                pcs = cfg.get("pcs") or {}
+                palabras_pc = pcs.get("palabras_ozbargain") if pcs.get("activo") else None
                 for p in posts:
-                    modelos = feeds.modelos_del_post(p)
+                    modelos = feeds.modelos_del_post(p, palabras_pc)
                     info = db.guardar_post(p, [o.modelo for o in modelos])
                     nuevos = motor.evaluar_post(p, info, modelos)
                     if any(a.urgente for a in nuevos):
