@@ -357,7 +357,27 @@ def parsear_pc(o: Oferta, t: str) -> None:
         o.descartada = "PC sin placa de video reconocible"
         return
     o.modelo = f"PC {chip}"
-    o.datos = {"chip": chip, "fabricante": "NVIDIA" if chip.startswith("RTX") else "AMD"}
+    o.datos = {"chip": chip, "fabricante": "NVIDIA" if chip.startswith("RTX") else "AMD", "ram_gb": ram_de_pc(t)}
+
+
+RAM_PC_VALIDAS = {8, 16, 24, 32, 48, 64, 96, 128}
+# "32GB DDR5", "16GB (2x8GB) DDR4", "32GB RAM": la RAM dicha como tal
+RE_RAM_PC = _r(r"(?<![\d.])(\d{1,3})\s*GB?\s*(?:\(\s*\d\s*X\s*\d+\s*GB?\s*\)\s*)?(?:DDR\d|RAM|MEMORIA)")
+# la placa con su VRAM ("RTX 5070 TI 16GB", "RX 9070 XT 16GB GDDR6"), para no confundirla con la RAM
+RE_GPU_VRAM = _r(r"\b(?:RTX|RX)\s*-?\s*\d{4}\s*(?:TI SUPER|TI|SUPER|XTX|XT|GRE|S)?\s*\d{1,2}\s*GB?\b(?:\s*GDDR\d)?")
+RE_GB_SUELTO = _r(r"(?<![\d.])(\d{1,3})\s*GB?(?![A-Z0-9])(?!\s*(?:GDDR|VRAM|SSD|NVME|M\.2|HDD))")
+
+
+def ram_de_pc(t: str) -> int | None:
+    """Cantidad de RAM de una PC armada, sin tomar la VRAM de la placa ni el disco."""
+    for m in RE_RAM_PC.finditer(t):
+        if int(m.group(1)) in RAM_PC_VALIDAS:
+            return int(m.group(1))
+    sin_gpu = RE_GPU_VRAM.sub(" ", t)
+    for m in RE_GB_SUELTO.finditer(sin_gpu):
+        if int(m.group(1)) in RAM_PC_VALIDAS:
+            return int(m.group(1))
+    return None
 
 
 # ---------------------------------------------------------------- entrada principal

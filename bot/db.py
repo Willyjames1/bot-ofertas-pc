@@ -162,12 +162,23 @@ class DB:
         self.c.execute("INSERT INTO corridas_tienda VALUES(?,?,?,?,?,?)",
                        (_iso(datetime.now(timezone.utc)), tienda, int(ok), productos, error, segundos))
 
-    def guardar_cotizacion(self, mep: float, aud_usd: float):
+    def guardar_cotizacion(self, mep: float | None, aud_usd: float | None):
+        """Guarda lo que se pudo bajar (la que falló queda NULL)."""
         self.c.execute("INSERT INTO cotizaciones VALUES(?,?,?)",
                        (_iso(datetime.now(timezone.utc)), mep, aud_usd))
 
-    def ultima_cotizacion(self) -> sqlite3.Row | None:
-        return self.c.execute("SELECT * FROM cotizaciones ORDER BY ts DESC LIMIT 1").fetchone()
+    def ultima_cotizacion(self, cual: str = "mep") -> sqlite3.Row | None:
+        """La última fila con esa cotización ('mep' o 'aud_usd')."""
+        assert cual in ("mep", "aud_usd")
+        return self.c.execute(f"SELECT * FROM cotizaciones WHERE {cual} IS NOT NULL "
+                              "ORDER BY ts DESC LIMIT 1").fetchone()
+
+    def vigentes(self, pais: str, categoria: str, desde: datetime) -> list[sqlite3.Row]:
+        """Ofertas con stock (o stock desconocido) vistas desde 'desde', sin sospechosas ni combos."""
+        return self.c.execute(
+            "SELECT * FROM ofertas WHERE pais=? AND categoria=? AND ultima_vez>=? AND modelo IS NOT NULL "
+            "AND sospechoso=0 AND combo=0 AND (stock IS NULL OR stock=1) ORDER BY precio",
+            (pais, categoria, _iso(desde))).fetchall()
 
     def get(self, clave: str, defecto: str | None = None) -> str | None:
         fila = self.c.execute("SELECT valor FROM estado WHERE clave=?", (clave,)).fetchone()

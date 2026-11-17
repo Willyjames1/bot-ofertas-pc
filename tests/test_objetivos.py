@@ -96,7 +96,7 @@ def test_pc_de_tienda_ar_con_5070ti_bajo_objetivo_avisa_una_vez():
     o = oferta(titulo, 3_800_000, cat="pcs", pais="AR", tienda="venex", url="https://v/pc1")
     assert o.modelo == "PC RTX 5070 Ti" and not o.descartada
     av = m.evaluar_oferta(o, db.guardar_oferta(o))
-    assert len(av) == 1 and "PC ARMADA" in av[0].texto and titulo in av[0].texto and "5% abajo" in av[0].texto
+    assert len(av) == 1 and av[0].texto.startswith("🎯 <b>PC RTX 5070 Ti</b> — bajo tu objetivo en 🇦🇷") and titulo in av[0].texto         and "5% abajo" in av[0].texto
     despachar(av, Telegram(Secretos("", "1", ""), dry_run=True), db, CFG, AJ, Secretos("", "1", ""),
               datetime(2026, 11, 16, 15, tzinfo=timezone.utc))
     o2 = oferta(titulo, 3_750_000, cat="pcs", pais="AR", tienda="venex", url="https://v/pc1")  # −1%
@@ -152,7 +152,7 @@ def test_post_pc_ozbargain_bajo_3000_avisa_y_componentes_siguen_igual():
     av = m.evaluar_post(p, db.guardar_post(p, [o.modelo for o in mods]), mods)
     assert av and av[0].urgente
     t = av[0].texto
-    assert "PC ARMADA" in t and "A$2.799</b> en Techfast" in t and "7% abajo" in t and "Ver el post" in t
+    assert "OzBargain 🇦🇺" in t and "🇦🇺 @ Techfast: <b>A$2.799</b>" in t and "7% abajo" in t and "Ver el post" in t
     caro = post("11", "Gaming PC Ryzen 7 9800X3D RTX 5080 32GB $3,299 @ Techfast", votos=80)
     mods = modelos_del_post(caro, PALABRAS)
     assert not [a for a in m.evaluar_post(caro, db.guardar_post(caro, ["x"]), mods) if a.urgente]  # PCs: solo por precio
@@ -185,7 +185,7 @@ def test_tienda_oficial_en_ebay_es_excepcion():
                    "$2999 Delivered @ HP eBay", url_tienda="https://www.ebay.com.au/itm/366371770882")
     mods = modelos_del_post(p, PALABRAS)
     av = m.evaluar_post(p, db.guardar_post(p, [o.modelo for o in mods]), mods)
-    assert av and av[0].urgente and "PC RTX 5070 Ti" in av[0].texto and "A$2.999</b> en HP eBay" in av[0].texto
+    assert av and av[0].urgente and "PC RTX 5070 Ti" in av[0].texto and "@ HP eBay: <b>A$2.999</b>" in av[0].texto
     otro = post("31", "HP Omen 35L Gaming PC RTX 5070 Ti $2,899 Delivered @ techdeals_au eBay",
                 url_tienda="https://www.ebay.com.au/itm/1")
     mods = modelos_del_post(otro, PALABRAS)

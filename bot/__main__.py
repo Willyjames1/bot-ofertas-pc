@@ -3,6 +3,7 @@
   python -m bot correr [--dry-run] [--forzar] [--solo tiendas|feeds]
   python -m bot probar <tienda> [--categoria placas] [--guardar-html]
   python -m bot tiendas
+  python -m bot resumen [--dry-run]
 """
 from __future__ import annotations
 
@@ -66,6 +67,28 @@ def cmd_tiendas(_a):
         print(f"{k:<14} {v.pais}  {v.nombre:<20} {', '.join(v.categorias)}")
 
 
+def cmd_resumen(a):
+    """Arma el resumen diario ahora, sin esperar a las 12:00 (no lo marca como enviado)."""
+    import json as _json
+    from datetime import datetime, timezone
+    from . import alertas, config, cotizaciones
+    from .db import DB
+    from .fuentes import TIENDAS
+    from .resumen import texto
+    from .telegram import Telegram
+    cfg = config.cargar()
+    db = DB(config.ruta_db())
+    alertas.NOMBRE_TIENDA.update(_json.loads(db.get("nombres_tiendas", "{}")))
+    alertas.NOMBRE_TIENDA.update({k: v.nombre for k, v in TIENDAS.items()})
+    sec = config.Secretos.desde_entorno()
+    txt = texto(db, cfg, cotizaciones.obtener(db), datetime.now(timezone.utc))
+    db.commit()
+    db.cerrar()
+    if not txt:
+        sys.exit("No hay productos en resumen_diario (config.yaml)")
+    Telegram(sec, dry_run=a.dry_run).enviar(sec.chat_yo, txt)
+
+
 def main(argv=None):
     # la consola de Windows no es UTF-8 por defecto y los avisos llevan emojis
     for flujo in (sys.stdout, sys.stderr):
@@ -85,6 +108,9 @@ def main(argv=None):
     pr.add_argument("--guardar-html", action="store_true", help="guarda la página 1 en tests/fixtures")
     pr.set_defaults(f=cmd_probar)
     sp.add_parser("tiendas", help="lista las tiendas registradas").set_defaults(f=cmd_tiendas)
+    rs = sp.add_parser("resumen", help="arma el resumen diario ahora")
+    rs.add_argument("--dry-run", action="store_true", help="no lo manda, lo imprime")
+    rs.set_defaults(f=cmd_resumen)
     a = p.parse_args(argv)
     _log(a.verbose)
     a.f(a)

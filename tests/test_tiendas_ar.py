@@ -168,4 +168,4 @@ def test_mensaje_ar_muestra_tipo_de_precio_y_lista(tmp_path):
     texto = m.texto_oferta("prueba", o, None, None, None)
     assert "transferencia · lista" in texto and "Gezatek" in texto
     o.tienda, o.tipo_precio, o.precio_lista = "venex", "contado", None
-    assert " contado en Venex" in m.texto_oferta("prueba", o, None, None, None)
+    assert "@ Venex: <b>$2.000.000</b> contado" in m.texto_oferta("minimo", o, None, None, None)

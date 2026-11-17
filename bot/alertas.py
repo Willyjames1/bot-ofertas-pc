@@ -12,7 +12,8 @@ from zoneinfo import ZoneInfo
 
 from . import perf
 from .config import TZ_AR, Secretos
-from .cotizaciones import Cotizacion, ars, calcular, texto_conviene
+from .comparar import lineas_comparacion
+from .cotizaciones import Cotizacion, ars
 from .db import DB
 from .feeds import vigente
 from .modelos import Oferta, Post
@@ -166,44 +167,51 @@ class Motor:
         self.cfg, self.aj, self.db, self.cot, self.inicio = cfg, ajustes, db, cot, inicio
 
     # -------------------------------------------------- textos
-    def _linea_conviene(self, modelo: str, precio_aud: float) -> str:
-        if not self.cot:
-            return "✈️ ¿Conviene traerlo? (sin cotización, no lo pude calcular)"
-        mejor = self.db.mejor(modelo, "AR")
-        aduana = bool((self.cfg.get("general") or {}).get("aduana"))
-        c = calcular(precio_aud, self.cot, mejor["precio"] if mejor else None, aduana)
-        return texto_conviene(c, NOMBRE_TIENDA.get(mejor["tienda"], mejor["tienda"]) if mejor else None, aduana)
+    def _comparacion(self, pais: str, categoria: str, modelo: str, datos: dict, precio: float) -> list[str]:
+        return lineas_comparacion(self.db, self.cot, pais, categoria, modelo, datos, precio,
+                                  NOMBRE_TIENDA, self.inicio)
 
-    def texto_oferta(self, motivo: str, o: Oferta, precio_antes: float | None,
-                     minimo: float | None, objetivo: float | None) -> str:
-        tienda = NOMBRE_TIENDA.get(o.tienda, o.tienda)
-        lineas = [f"{ICONO.get(o.categoria, o.categoria.upper())} · {motivo}",
-                  f"<b>{escape(o.modelo or '')}</b>" + (f" — {escape(o.variante)}" if o.variante else "")]
-        if o.categoria == "pcs":
-            lineas.append(f"📝 {escape(o.titulo)}")
-        precio = f"💰 <b>{plata(o.precio, o.moneda)}</b>"
+    @staticmethod
+    def _linea_precio(o: Oferta, tienda: str, precio_antes: float | None) -> str:
+        """'🇦🇺 MSI Ventus 3X @ Centre Com: A$1.441 (antes A$1.699)'."""
+        nombre = o.titulo if o.categoria == "pcs" else (o.variante or o.titulo[:60])
+        linea = f"{BANDERA.get(o.pais, '')} {escape(nombre)} @ {escape(tienda)}: <b>{plata(o.precio, o.moneda)}</b>"
         if o.pais == "AR" and o.tipo_precio in ("transferencia", "contado"):
-            precio += f" {o.tipo_precio}"
+            linea += f" {o.tipo_precio}"
             if o.precio_lista:
-                precio += f" · lista {plata(o.precio_lista, o.moneda)}"
-        precio += f" en {escape(tienda)} {BANDERA.get(o.pais, '')}"
+                linea += f" · lista {plata(o.precio_lista, o.moneda)}"
         if precio_antes and precio_antes > o.precio:
-            precio += f" · −{(1 - o.precio / precio_antes) * 100:.0f}% (antes {plata(precio_antes, o.moneda)})"
-        lineas.append(precio)
+            linea += f" (antes {plata(precio_antes, o.moneda)})"
+        return linea
+
+    def texto_oferta(self, tipo: str, o: Oferta, precio_antes: float | None,
+                     minimo: float | None, objetivo: float | None) -> str:
+        """tipo: 'objetivo' | 'minimo'. Formato:
+        🔻 RTX 5070 Ti — bajó 15% en 🇦🇺 / precio y tienda / el otro país / diferencia / aduana / veredicto."""
+        tienda = NOMBRE_TIENDA.get(o.tienda, o.tienda)
+        bandera = BANDERA.get(o.pais, "")
+        modelo = escape(o.modelo or "")
+        if precio_antes and precio_antes > o.precio:
+            cabeza = f"🔻 <b>{modelo}</b> — bajó {(1 - o.precio / precio_antes) * 100:.0f}% en {bandera}"
+        elif tipo == "objetivo":
+            cabeza = f"🎯 <b>{modelo}</b> — bajo tu objetivo en {bandera}"
+        else:
+            cabeza = f"📉 <b>{modelo}</b> — nuevo mínimo histórico en {bandera}"
+        lineas = [cabeza, self._linea_precio(o, tienda, precio_antes)]
+        lineas += self._comparacion(o.pais, o.categoria, o.modelo, o.datos, o.precio)
         if o.cuotas:
             lineas.append(f"💳 {escape(o.cuotas)}")
-        if o.categoria == "pcs":
-            lineas.append(bajo_objetivo(o.precio, objetivo, o.moneda))
-        else:
-            lineas.append(f"📉 Mín. histórico: {plata(minimo, o.moneda)} · {bajo_objetivo(o.precio, objetivo, o.moneda)}")
+        extra = [bajo_objetivo(o.precio, objetivo, o.moneda)] if objetivo else []
+        if minimo and o.categoria != "pcs":
+            extra.append(f"📉 Mín. histórico: {plata(minimo, o.moneda)}")
+        if extra:
+            lineas.append(" · ".join(extra))
         if o.tray:
             lineas.append("📦 Tray / sin caja")
         if o.datos.get("via") == "staticICE":
             fecha = o.datos.get("actualizado", "")
             fecha = f"{fecha[8:10]}/{fecha[5:7]}" if len(fecha) == 10 else "?"
             lineas.append(f"ℹ️ Precio visto en staticICE (actualizado el {fecha}): confirmá precio y stock en la tienda")
-        if o.pais == "AU" and o.modelo and o.categoria != "pcs":
-            lineas.append(self._linea_conviene(o.modelo, o.precio))
         lineas.append(f'🔗 <a href="{escape(o.url)}">Ver en la tienda</a>')
         return "\n".join(lineas)
 
@@ -226,20 +234,20 @@ class Motor:
         historial_ok = desde is not None and (self.inicio - desde) >= timedelta(
             hours=self.aj["horas_historial_para_minimo"])
 
-        motivo, tipo = None, None
+        tipo = None
         if objetivo and o.precio <= objetivo:
-            motivo, tipo = "🎯 <b>Bajo tu objetivo</b>", "objetivo"
+            tipo = "objetivo"
         elif historial_ok and minimo and o.precio < minimo:
-            motivo, tipo = "📉 <b>Nuevo mínimo histórico</b>", "minimo"
+            tipo = "minimo"
 
         avisos: list[Aviso] = []
         clave = f"precio|{o.tienda}|{o.modelo}"
-        if motivo:
+        if tipo:
             ult = self.db.ultima_alerta(clave)
             repetida = ult is not None and ult["precio"] and \
                 o.precio > ult["precio"] * (1 - self.aj["re_aviso_baja_pct"] / 100)
             if not repetida:
-                avisos.append(Aviso(tipo, clave, True, self.texto_oferta(motivo, o, info["precio_antes"],
+                avisos.append(Aviso(tipo, clave, True, self.texto_oferta(tipo, o, info["precio_antes"],
                                                                           minimo, objetivo), o.pais, o.precio))
                 return avisos
         # ---- no suena: va al resumen
@@ -267,7 +275,7 @@ class Motor:
         ult = self.db.ultima_alerta(clave)
         if ult is not None and ult["precio"] and o.precio > ult["precio"] * (1 - self.aj["re_aviso_baja_pct"] / 100):
             return []
-        texto = self.texto_oferta("🎯 <b>Bajo tu objetivo</b>", o, info.get("precio_antes"), None, objetivo)
+        texto = self.texto_oferta("objetivo", o, info.get("precio_antes"), None, objetivo)
         return [Aviso("objetivo", clave, True, texto, o.pais, o.precio)]
 
     # -------------------------------------------------- oportunidades
@@ -297,16 +305,17 @@ class Motor:
                         continue
                     m = ra["moneda"]
                     tienda = NOMBRE_TIENDA.get(ra["tienda"], ra["tienda"])
-                    lineas = [f"{ICONO[cat]} · 💥 <b>Oportunidad fuerte</b> {BANDERA[pais]}",
-                              f"<b>{escape(ra['modelo'])}</b>" + (f" — {escape(ra['variante'])}" if ra["variante"] else ""),
-                              f"💰 <b>{plata(ra['precio'], m)}</b> en {escape(tienda)}, igual o menos que:"]
+                    datos_a = json.loads(ra["datos"] or "{}")
+                    nombre = escape(ra["variante"] or ra["titulo"][:60])
+                    lineas = [f"💥 <b>{escape(ra['modelo'])}</b> — oportunidad fuerte en {BANDERA[pais]}",
+                              f"{BANDERA[pais]} {nombre} @ {escape(tienda)}: <b>{plata(ra['precio'], m)}</b>, "
+                              "igual o menos que:"]
                     for bajo, rb in sorted(vencidos, key=lambda x: -x[1]["precio"])[:3]:
                         lineas.append(f"   • {escape(rb['modelo'])} a {plata(rb['precio'], m)} "
                                       f"({escape(NOMBRE_TIENDA.get(rb['tienda'], rb['tienda']))})")
-                    if json.loads(ra["datos"] or "{}").get("via") == "staticICE":
+                    lineas += self._comparacion(pais, cat, ra["modelo"], datos_a, ra["precio"])
+                    if datos_a.get("via") == "staticICE":
                         lineas.append("ℹ️ Precio visto en staticICE: confirmá precio y stock en la tienda")
-                    if pais == "AU":
-                        lineas.append(self._linea_conviene(ra["modelo"], ra["precio"]))
                     lineas.append(f'🔗 <a href="{escape(ra["url"])}">Ver en la tienda</a>')
                     avisos.append(Aviso("oportunidad", clave, True, "\n".join(lineas), pais, ra["precio"]))
         return avisos
@@ -331,26 +340,25 @@ class Motor:
         edad = datetime.now(timezone.utc) - p.publicado
         umbral = self.aj["votos_ozbargain_urgente"]
         motivo = None
+        fuente = "OzBargain" if p.fuente == "ozbargain" else "Reddit"
         if p.precio and objetivo and p.precio <= objetivo:
-            motivo = "🎯 <b>Bajo tu objetivo</b>"
+            motivo = f"🎯 <b>{escape(o.modelo)}</b> — bajo tu objetivo en {fuente} 🇦🇺"
         elif o.categoria == "pcs":
             motivo = None  # PCs armadas: solo por precio, no por votos
         elif p.fuente == "ozbargain" and p.votos is not None and p.votos >= umbral and edad <= timedelta(hours=1):
-            motivo = f"🔥 <b>{p.votos} votos en {int(edad.total_seconds() // 60)} min</b>"
-        fuente = "OzBargain" if p.fuente == "ozbargain" else "Reddit"
+            motivo = (f"🔥 <b>{escape(o.modelo)}</b> — {p.votos} votos en "
+                      f"{int(edad.total_seconds() // 60)} min en {fuente} 🇦🇺")
         if motivo:
-            lineas = [f"{ICONO.get(o.categoria)} · {motivo} · {fuente} 🇦🇺",
-                      f"<b>{escape(o.modelo)}</b>" + (f" — {escape(o.variante)}" if o.variante else ""),
-                      f"📝 {escape(p.titulo)}"]
+            lineas = [motivo, f"📝 {escape(p.titulo)}"]
             if "upcoming" in p.estados:
                 lineas.append("⏳ Todavía no arrancó (OzBargain lo marca como 'upcoming')")
             if p.expira:
                 lineas.append(f"⌛ Vence: {p.expira.astimezone(TZ_AR):%d/%m %H:%M} hora argentina")
             if p.precio:
-                tienda = f" en {escape(p.titulo.rsplit(' @ ', 1)[1])}" if " @ " in p.titulo else ""
-                lineas.append(f"💰 <b>{plata(p.precio, 'AUD')}</b>{tienda} · {bajo_objetivo(p.precio, objetivo, 'AUD')}")
-                if o.categoria != "pcs":
-                    lineas.append(self._linea_conviene(o.modelo, p.precio))
+                tienda = f" @ {escape(p.titulo.rsplit(' @ ', 1)[1])}" if " @ " in p.titulo else ""
+                lineas.append(f"🇦🇺{tienda}: <b>{plata(p.precio, 'AUD')}</b>")
+                lineas += self._comparacion("AU", o.categoria, o.modelo, o.datos, p.precio)
+                lineas.append(bajo_objetivo(p.precio, objetivo, "AUD"))
             lineas.append(f'🔗 <a href="{escape(p.url)}">Ver el post</a>')
             return [Aviso("ozbargain" if p.fuente == "ozbargain" else "post_urgente",
                           f"post|{p.fuente}|{p.id}", True, "\n".join(lineas), "AU", p.precio)]

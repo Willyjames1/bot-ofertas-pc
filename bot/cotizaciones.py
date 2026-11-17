@@ -1,80 +1,96 @@
-"""Cotizaciones (MEP y AUD/USD) y el cálculo de "¿conviene traerlo de Australia?"."""
+"""Cotizaciones: dólar MEP (dolarapi.com) y AUD/USD (frankfurter.app).
+
+Se bajan UNA vez por corrida y se usan para todos los avisos de esa corrida. Cada una se guarda en la
+base; si alguna de las dos falla, se usa la última guardada y el aviso lo aclara."""
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
+from .config import TZ_AR
 from .db import DB
 from .red import Cliente
 
 log = logging.getLogger("bot.cotizaciones")
 URL_MEP = "https://dolarapi.com/v1/dolares/bolsa"
-URL_AUD = "https://api.frankfurter.dev/v1/latest?from=AUD&to=USD"
-FRANQUICIA_USD = 500
+URL_AUD = "https://api.frankfurter.app/latest?from=AUD&to=USD"
+FRANQUICIA_USD = 500   # aduana: lo que pase de USD 500 paga 50%
 ARANCEL = 0.5
+FUENTE = {"mep": "dolarapi.com", "aud_usd": "frankfurter.app"}
 
 
 @dataclass
 class Cotizacion:
-    mep: float
-    aud_usd: float
+    mep: float                 # pesos por dólar (venta)
+    aud_usd: float             # dólares por dólar australiano
     ts: datetime
+    respaldo: dict[str, datetime] = field(default_factory=dict)  # cuál vino de la base y de cuándo
+
+    def aud_a_usd(self, aud: float) -> float:
+        return aud * self.aud_usd
+
+    def usd_a_ars(self, usd: float) -> float:
+        return usd * self.mep
+
+    def aud_a_ars(self, aud: float) -> float:
+        return self.usd_a_ars(self.aud_a_usd(aud))
+
+    def ars_a_usd(self, pesos: float) -> float:
+        return pesos / self.mep
+
+    def aduana_ars(self, usd: float) -> float:
+        return ARANCEL * max(0.0, usd - FRANQUICIA_USD) * self.mep
+
+    def nota_respaldo(self) -> str | None:
+        """'⚠️ Cotización guardada: MEP del 16/11 14:00 (dolarapi.com no respondió)'."""
+        if not self.respaldo:
+            return None
+        partes = [f"{'MEP' if k == 'mep' else 'AUD/USD'} del {ts.astimezone(TZ_AR):%d/%m %H:%M} "
+                  f"({FUENTE[k]} no respondió)" for k, ts in self.respaldo.items()]
+        return "⚠️ Cotización guardada: " + "; ".join(partes)
 
 
-def obtener(db: DB, cliente: Cliente | None = None, max_minutos: int = 60) -> Cotizacion | None:
-    ult = db.ultima_cotizacion()
-    if ult:
-        ts = datetime.fromisoformat(ult["ts"])
-        if datetime.now(timezone.utc) - ts < timedelta(minutes=max_minutos):
-            return Cotizacion(ult["mep"], ult["aud_usd"], ts)
-    cliente = cliente or Cliente(pausa=(0.5, 1.0), respetar_robots=False)
+def _bajar(cliente: Cliente) -> dict[str, float | None]:
+    valores: dict[str, float | None] = {"mep": None, "aud_usd": None}
     try:
-        mep = float(cliente.get(URL_MEP).json()["venta"])
-        aud = float(cliente.get(URL_AUD).json()["rates"]["USD"])
-        db.guardar_cotizacion(mep, aud)
-        return Cotizacion(mep, aud, datetime.now(timezone.utc))
+        valores["mep"] = float(cliente.get(URL_MEP).json()["venta"])
     except Exception as e:  # noqa: BLE001
-        log.warning("No pude actualizar cotizaciones: %s", e)
-        if ult:
-            return Cotizacion(ult["mep"], ult["aud_usd"], datetime.fromisoformat(ult["ts"]))
-        return None
+        log.warning("No pude bajar el MEP de %s: %s", FUENTE["mep"], type(e).__name__)
+    try:
+        valores["aud_usd"] = float(cliente.get(URL_AUD).json()["rates"]["USD"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("No pude bajar el AUD/USD de %s: %s", FUENTE["aud_usd"], type(e).__name__)
+    return valores
 
 
-@dataclass
-class Conviene:
-    costo_ars: float          # lo que cuesta traerlo, ya con el reintegro del TRS
-    usd: float                # valor en USD después del TRS (base para aduana)
-    aduana_ars: float         # lo que pagarías si te cobran aduana
-    mejor_ar: float | None
-    ahorro: float | None      # positivo = conviene traerlo
-    ahorro_pct: float | None
-
-
-def calcular(precio_aud: float, cot: Cotizacion, mejor_ar: float | None, aduana: bool = False) -> Conviene:
-    sin_gst = precio_aud * (1 - 1 / 11)
-    usd = sin_gst * cot.aud_usd
-    costo = usd * cot.mep
-    aduana_ars = ARANCEL * max(0.0, usd - FRANQUICIA_USD) * cot.mep
-    total = costo + (aduana_ars if aduana else 0)
-    ahorro = (mejor_ar - total) if mejor_ar else None
-    pct = (ahorro / mejor_ar * 100) if mejor_ar else None
-    return Conviene(total, usd, aduana_ars, mejor_ar, ahorro, pct)
+def obtener(db: DB, cliente: Cliente | None = None) -> Cotizacion | None:
+    """Baja las dos cotizaciones (una vez por corrida: el que llama la guarda y la reusa)."""
+    propio = cliente is None
+    cliente = cliente or Cliente(pausa=(0.3, 0.6), respetar_robots=False)
+    try:
+        valores = _bajar(cliente)
+    finally:
+        if propio:
+            cliente.cerrar()
+    ahora = datetime.now(timezone.utc)
+    if any(v is not None for v in valores.values()):
+        db.guardar_cotizacion(valores["mep"], valores["aud_usd"])
+    respaldo: dict[str, datetime] = {}
+    for k in ("mep", "aud_usd"):
+        if valores[k] is None:
+            fila = db.ultima_cotizacion(k)
+            if not fila:
+                log.warning("Sin %s y sin cotización guardada: no puedo convertir precios", k)
+                return None
+            valores[k] = fila[k]
+            respaldo[k] = datetime.fromisoformat(fila["ts"])
+    return Cotizacion(valores["mep"], valores["aud_usd"], ahora, respaldo)
 
 
 def ars(x: float) -> str:
     return "$" + f"{x:,.0f}".replace(",", ".")
 
 
-def texto_conviene(c: Conviene, tienda_ar: str | None, aduana: bool) -> str:
-    base = f"✈️ ¿Conviene traerlo? Traído: {ars(c.costo_ars)} (con TRS{', con aduana' if aduana else ''})"
-    if c.mejor_ar:
-        if c.ahorro >= 0:
-            base += f" vs {ars(c.mejor_ar)} en {tienda_ar} → ahorrás {ars(c.ahorro)} ({c.ahorro_pct:.0f}%)"
-        else:
-            base += f" vs {ars(c.mejor_ar)} en {tienda_ar} → perdés {ars(-c.ahorro)}. Comprá acá"
-    else:
-        base += " (no hay precio argentino para comparar)"
-    if not aduana:
-        base += f"\n   Si te cobran aduana: +{ars(c.aduana_ars)}"
-    return base
+def usd(x: float) -> str:
+    return "USD " + f"{x:,.0f}".replace(",", ".")

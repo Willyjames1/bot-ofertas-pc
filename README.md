@@ -7,12 +7,37 @@ lee OzBargain y me avisa **solo** de lo que pasa mis filtros de `config.yaml`.
 - **Suena** (pocas veces por semana): precio bajo el objetivo, nuevo mínimo histórico, post de
   OzBargain muy votado en su primera hora y "oportunidad fuerte" (una gama más alta al precio de una
   más baja).
-- **Todo lo demás** (bajas, vuelta de stock, gangas, posts nuevos) se guarda para el resumen diario
+- **Todo lo demás** (bajas, vuelta de stock, gangas, posts nuevos) se guarda para el resumen
   (Fase 2).
-- Las alertas de Australia traen la línea **"¿conviene traerlo?"**: precio AUD × AUD/USD × MEP × (1 − 1/11)
-  por el reintegro del TRS, comparado con el mejor precio argentino de transferencia, y la línea
-  "Si te cobran aduana: +$X" (50% de lo que pase los USD 500 de franquicia). Ojo: la franquicia es
-  **por viajero y por viaje**, no por producto.
+- **Cada aviso viene comparado con el otro país**: el precio pasado a dólares y pesos, el mejor precio
+  con stock del producto equivalente del otro lado (visto en las últimas 48 h), la diferencia, la
+  cuenta con aduana y un veredicto. Si el aviso es de Argentina, se invierte: primero el precio
+  argentino y abajo el australiano convertido.
+
+  ```
+  🔻 RTX 5070 Ti 16GB — bajó 15% en 🇦🇺
+  🇦🇺 MSI Ventus 3X OC @ Centre Com: A$1.441 (antes A$1.699)
+     ≈ USD 974 ≈ $1.546.994 (MEP $1.589)
+  🇦🇷 Mejor precio: Venex $2.319.990 contado (mismo chip)
+  💰 Diferencia: ~$772.996 más barato en 🇦🇺 (33%)
+  🛃 Si se declara en aduana (50% sobre lo que pase de USD 500): ~$1.923.267 → ~$396.723 más barato
+  ✅ Veredicto: conviene
+  ```
+
+  - **Cotizaciones**: en cada corrida se baja una vez el AUD/USD de frankfurter.app y el dólar MEP de
+    dolarapi.com (`/v1/dolares/bolsa`) y se guardan en la base. Si alguna falla, se usa la última
+    guardada y el aviso lo aclara ("⚠️ Cotización guardada: MEP del 16/11 14:00").
+  - **Cuenta**: A$ × AUD/USD = USD; USD × MEP = pesos. No se descuenta el reintegro del TRS (el GST).
+    Aduana: 50% de lo que pase de USD 500. Ojo: la franquicia es **por viajero y por viaje**, no por
+    producto.
+  - **Equivalente**: placas, el mismo chip y la misma VRAM de cualquier marca; CPU, el mismo modelo;
+    RAM, la misma capacidad, cantidad de módulos y velocidad; PCs, la misma placa y la misma cantidad
+    de RAM. Si no está, se usa el más parecido y se marca "aprox." (por ejemplo "CL36 en vez de CL30").
+  - **Veredicto** (con aduana): "conviene" si traerlo sale más de 10% más barato, "casi igual" entre
+    0 y 10%, "no conviene" si sale más caro.
+- **Resumen diario** a las 12:00 hora argentina (sección `resumen_diario` de `config.yaml`): un
+  mensaje con el mejor precio de hoy en 🇦🇷 y 🇦🇺 de cada producto, pasado a pesos y con la diferencia
+  entre países. Sale en la primera corrida desde esa hora; para verlo ya: `python -m bot resumen --dry-run`.
 
 ## Cómo está armado
 
@@ -23,7 +48,9 @@ bot/
   normalizar.py    título → modelo canónico; descarta usados y notebooks; PCs armadas por su placa
   fuentes/         un archivo por tienda, todos con la misma interfaz (base.py)
   feeds.py         OzBargain por RSS (ignora expirados, agotados y posts de más de 7 días)
-  cotizaciones.py  MEP (dolarapi.com) y AUD/USD (frankfurter) + cálculo de "conviene"
+  cotizaciones.py  MEP (dolarapi.com) y AUD/USD (frankfurter.app), una vez por corrida
+  comparar.py      producto equivalente del otro país, diferencia, aduana y veredicto
+  resumen.py       resumen diario de las 12:00
   alertas.py       filtros, objetivos, mínimos, oportunidades, tope diario, silencio nocturno
   telegram.py      envío y lectura de comandos (solo chat_id autorizados)
   db.py            SQLite: el historial guarda solo los CAMBIOS de precio
@@ -100,7 +127,7 @@ cuestan menos que el objetivo (hasta 8 por corrida).
 
 Los precios argentinos se comparan con el de **transferencia/contado**; los australianos incluyen GST.
 En `general` están el tope de alertas por día, el silencio nocturno (00 a 08 hora argentina: llegan
-sin sonido), `aduana`, `mostrar_tray` y `combos`. El modo Black Friday (23/11 al 1/12) cambia solo
+sin sonido), `mostrar_tray` y `combos`. El modo Black Friday (23/11 al 1/12) cambia solo
 la frecuencia de los foros, el umbral de votos y el tope; después vuelve solo a lo normal.
 
 ## Activar a tu hermano

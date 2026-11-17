@@ -7,7 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
-from . import alertas, comandos, config, cotizaciones, feeds
+from . import alertas, comandos, config, cotizaciones, feeds, resumen as resumen_diario
 from .alertas import Aviso, Motor
 from .db import DB
 from .fuentes import TIENDAS
@@ -198,6 +198,13 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
                 f"{r['n'] - r['ok']} de {r['n']} corridas fallaron" for r in caidas) + "\n\nMás detalle: /estado"
             tg.enviar(sec.chat_yo, txt, silencioso=True)
         db.set("aviso_caidas", str(ahora_ar.date()))
+
+    # 5) resumen diario (desde las 12:00 hora argentina, una vez por día; suena)
+    if resumen_diario.toca(db, cfg, inicio):
+        txt = resumen_diario.texto(db, cfg, cot, inicio)
+        if txt and tg.enviar(sec.chat_yo, txt):
+            resumen_diario.marcar_enviado(db, inicio)
+            resumen["resumen_diario"] = True
 
     resumen["alertas"] = alertas.despachar(avisos, tg, db, cfg, aj, sec)
     db.commit()

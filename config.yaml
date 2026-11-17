@@ -52,6 +52,19 @@ pcs:
   objetivo: {AUD: 3000, ARS: 4000000}
   palabras_ozbargain: [gaming PC, desktop, prebuilt]
 
+# Resumen diario: un mensaje por día (desde esta hora, hora argentina) con el mejor precio de
+# hoy en 🇦🇷 y 🇦🇺 de cada producto, pasado a pesos y con la diferencia entre países.
+# Nombres como en los objetivos: placa = chip; RAM = capacidad (módulos) velocidad mínima;
+# PCs = la placa que tiene que traer.
+resumen_diario:
+  activo: true
+  hora: "12:00"
+  productos:
+    placas: [RTX 5070 Ti, RTX 5080]
+    ram: [32GB (2x16) 6000, 64GB (2x32) 6000]
+    cpu: [Ryzen 9 9900X, Ryzen 9 9950X]
+    pcs: [RTX 5070 Ti]
+
 mothers: {activo: true, chipsets: [B850, X870, X870E], wifi: true}
 ssd: {activo: true, capacidad_tb: [2, 4], gen_min: 4}
 fuentes: {activo: true, watts_min: 850, certificacion_min: Gold, atx3: true}
@@ -65,7 +78,6 @@ general:
   votos_ozbargain_urgente: 25
   tope_alertas_que_suenan_por_dia: 6
   silencio_noche: {desde: "00:00", hasta: "08:00"}
-  aduana: false
   mostrar_tray: true
   combos: false
   # posts de estos vendedores no avisan (marketplaces: vende cualquiera). Usados y

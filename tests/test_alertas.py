@@ -6,7 +6,8 @@ import pytest
 from bot import config
 from bot.alertas import Motor, despachar, objetivo_de, pasa_filtros
 from bot.config import Secretos
-from bot.cotizaciones import Cotizacion, calcular
+from bot.comparar import cuenta, veredicto
+from bot.cotizaciones import Cotizacion
 from bot.db import DB
 from bot.feeds import modelos_del_post, parsear_ozbargain, vigente
 from bot.modelos import Oferta, Post
@@ -51,11 +52,15 @@ def test_objetivos():
     assert objetivo_de(CFG, "cpu", c.modelo, c.datos, "AUD") == 880
 
 
-def test_conviene():
-    c = calcular(1100, COT, mejor_ar=2_000_000)
-    assert c.costo_ars == pytest.approx(1100 * 10 / 11 * 0.68 * 1580)
-    assert c.aduana_ars == pytest.approx(0.5 * (1000 * 0.68 - 500) * 1580)
-    assert c.ahorro > 0
+def test_cuenta_y_veredicto():
+    # A$1100 = USD 748 = $1.181.840; aduana 50% de 248 USD = $195.920 → $1.377.760 traído
+    c = cuenta(COT, 1100, 2_000_000)
+    assert c.au_ars == pytest.approx(1100 * 0.68 * 1580)
+    assert c.aduana_ars == pytest.approx(0.5 * (1100 * 0.68 - 500) * 1580)
+    assert veredicto(c) == "conviene"
+    assert veredicto(cuenta(COT, 1100, 1_450_000)) == "casi igual"    # ~5% más barato traído
+    assert veredicto(cuenta(COT, 1100, 1_300_000)) == "no conviene"   # traído sale más caro
+    assert cuenta(COT, 600, 1_000_000).aduana_ars == 0               # USD 408: no paga
 
 
 def test_motor_objetivo_y_repetidas():
@@ -65,7 +70,9 @@ def test_motor_objetivo_y_repetidas():
     o = oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1449)
     av = m.evaluar_oferta(o, db.guardar_oferta(o))
     assert len(av) == 1 and av[0].urgente and "objetivo" in av[0].texto
-    assert "¿Conviene traerlo?" in av[0].texto and "Si te cobran aduana" in av[0].texto
+    assert av[0].texto.startswith("🎯 <b>RTX 5070 Ti 16GB</b> — bajo tu objetivo en 🇦🇺")
+    assert "≈ USD 985 ≈ $1.556.806 (MEP $1.580)" in av[0].texto
+    assert "Sin precio para comparar" in av[0].texto
     tg = Telegram(Secretos("", "1", ""), dry_run=True)
     despachar(av, tg, db, CFG, AJ, Secretos("", "1", ""), datetime(2026, 11, 15, 15, tzinfo=timezone.utc))
     # misma tienda+modelo, baja solo 1%: no repite
