@@ -87,9 +87,12 @@ def gpu_alcanza(cfg_pcs: dict, datos: dict) -> bool:
 
 def es_marketplace(cfg: dict, p: Post) -> bool:
     """Posts de eBay, Catch, MyDeal...: por el link de la tienda o por el '@ Tienda' del título."""
-    nombres = [x.lower() for x in (cfg.get("general") or {}).get("marketplaces") or []]
+    g = cfg.get("general") or {}
+    nombres = [x.lower() for x in g.get("marketplaces") or []]
     host = (p.url_tienda or "").lower()
     titulo = p.titulo.lower()
+    if any(f"@ {x.lower()}" in titulo for x in g.get("marketplaces_permitidos") or []):
+        return False  # tienda oficial dentro del marketplace (ej. "@ HP eBay")
     return any(n in host or f"@ {n}" in titulo or (" " in n and n in titulo) for n in nombres)
 
 

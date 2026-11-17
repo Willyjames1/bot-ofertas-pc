@@ -178,6 +178,20 @@ def test_posts_de_marketplace_y_usados_no_avisan(titulo, url_tienda):
     assert not [a for a in m.evaluar_post(p, db.guardar_post(p, [o.modelo for o in mods]), mods) if a.urgente]
 
 
+def test_tienda_oficial_en_ebay_es_excepcion():
+    db = DB(":memory:")
+    m = Motor(CFG, AJ, db, COT, datetime.now(timezone.utc))
+    p = post("30", "HP Omen 35L Gaming PC: AMD Ryzen 7 9800X3D, RTX 5070 Ti 16GB, 32GB DDR5 RAM, 1TB SSD "
+                   "$2999 Delivered @ HP eBay", url_tienda="https://www.ebay.com.au/itm/366371770882")
+    mods = modelos_del_post(p, PALABRAS)
+    av = m.evaluar_post(p, db.guardar_post(p, [o.modelo for o in mods]), mods)
+    assert av and av[0].urgente and "PC RTX 5070 Ti" in av[0].texto and "A$2.999</b> en HP eBay" in av[0].texto
+    otro = post("31", "HP Omen 35L Gaming PC RTX 5070 Ti $2,899 Delivered @ techdeals_au eBay",
+                url_tienda="https://www.ebay.com.au/itm/1")
+    mods = modelos_del_post(otro, PALABRAS)
+    assert not m.evaluar_post(otro, db.guardar_post(otro, ["x"]), mods)  # el resto de eBay sigue afuera
+
+
 def test_post_de_tienda_normal_avisa():
     db = DB(":memory:")
     m = Motor(CFG, AJ, db, COT, datetime.now(timezone.utc))

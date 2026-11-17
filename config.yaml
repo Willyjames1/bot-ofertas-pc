@@ -71,6 +71,8 @@ general:
   # posts de estos vendedores no avisan (marketplaces: vende cualquiera). Usados y
   # reacondicionados ya se descartan siempre.
   marketplaces: [ebay, catch.com.au, mydeal, kogan marketplace, amazon marketplace]
+  # excepciones: tiendas oficiales dentro de un marketplace (se reconocen por el "@ ..." del título)
+  marketplaces_permitidos: [HP eBay]
 
 # ------------------------------------------------------------
 #  Ajustes técnicos (normalmente no hace falta tocarlos)
