@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: "5,35 * * * *"
   workflow_dispatch:
+    inputs:
+      prueba:
+        description: "Mandar un mensaje de prueba a Telegram antes de correr"
+        type: boolean
+        default: false
 
 # Nunca dos corridas a la vez (se pisarían la base)
 concurrency:
@@ -39,6 +44,13 @@ jobs:
           else
             echo "Primera corrida: todavía no hay rama datos"
           fi
+
+      - name: Mensaje de prueba
+        if: ${{ inputs.prueba }}
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID_YO: ${{ secrets.TELEGRAM_CHAT_ID_YO }}
+        run: python -m bot prueba
 
       - name: Correr el bot
         env:

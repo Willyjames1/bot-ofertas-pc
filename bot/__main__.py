@@ -4,6 +4,7 @@
   python -m bot probar <tienda> [--categoria placas] [--guardar-html]
   python -m bot tiendas
   python -m bot resumen [--dry-run]
+  python -m bot prueba
 """
 from __future__ import annotations
 
@@ -89,6 +90,21 @@ def cmd_resumen(a):
     Telegram(sec, dry_run=a.dry_run).enviar(sec.chat_yo, txt)
 
 
+def cmd_prueba(_a):
+    """Manda un mensaje de prueba; sale con error si Telegram lo rechaza (token revocado, etc.)."""
+    from datetime import datetime
+    from . import config
+    from .telegram import Telegram
+    sec = config.Secretos.desde_entorno()
+    if not sec.token or not sec.chat_yo:
+        sys.exit("Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID_YO")
+    hora = datetime.now(config.TZ_AR)
+    if not Telegram(sec).enviar(sec.chat_yo, f"🧪 <b>Mensaje de prueba</b> desde GitHub Actions "
+                                               f"({hora:%d/%m %H:%M} hora argentina): el bot está conectado."):
+        sys.exit("Telegram rechazó el mensaje de prueba")
+    print("Mensaje de prueba enviado")
+
+
 def main(argv=None):
     # la consola de Windows no es UTF-8 por defecto y los avisos llevan emojis
     for flujo in (sys.stdout, sys.stderr):
@@ -111,6 +127,7 @@ def main(argv=None):
     rs = sp.add_parser("resumen", help="arma el resumen diario ahora")
     rs.add_argument("--dry-run", action="store_true", help="no lo manda, lo imprime")
     rs.set_defaults(f=cmd_resumen)
+    sp.add_parser("prueba", help="manda un mensaje de prueba a Telegram").set_defaults(f=cmd_prueba)
     a = p.parse_args(argv)
     _log(a.verbose)
     a.f(a)
