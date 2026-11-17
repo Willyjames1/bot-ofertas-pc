@@ -44,8 +44,12 @@ def categorias_a_leer(db: DB, cfg: dict, aj: dict, tid: str, ahora: datetime) ->
     corrida (la que hace más que no se lee) y cada N horas, para no cargar de pedidos a las
     tiendas. Las que están apagadas en config.yaml no se leen."""
     cats, pendientes = [], []
+    una = getattr(TIENDAS[tid], "una_categoria_por_corrida", False)
     for n, cat in enumerate(TIENDAS[tid].categorias):
         if not (cfg.get(cat) or {}).get("activo", True):
+            continue
+        if una:   # tiendas pesadas (HardGamers): una sola categoría por corrida, la que hace más que no se lee
+            pendientes.append((db.get(f"ult_cat:{tid}:{cat}") or "", n, cat))
             continue
         if cat in FASE2:
             ult = db.get(f"ult_cat:{tid}:{cat}")
@@ -139,11 +143,15 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
                     info = db.guardar_oferta(o)
                     avisos += motor.evaluar_oferta(o, info)
                 ok = error is None or validas > 0
+                if error is None and validas and hasattr(TIENDAS[tid], "tiendas_seguidas"):
+                    for seguida in TIENDAS[tid].tiendas_seguidas(cfg):
+                        if n := db.marcar_sin_stock(seguida, inicio):
+                            log.info("%s: %d productos dejaron de aparecer (sin stock)", seguida, n)
                 db.registrar_tienda(tid, error is None, validas, error, seg)
                 resumen["tiendas"][tid] = {"productos": validas, "error": error, "segundos": round(seg)}
                 log.info("%s: %d productos válidos%s (%.0fs)", tid, validas, f", ERROR {error}" if error else "", seg)
                 for cat in cats[tid]:
-                    if cat in FASE2:
+                    if cat in FASE2 or getattr(TIENDAS[tid], "una_categoria_por_corrida", False):
                         db.set(f"ult_cat:{tid}:{cat}", inicio.isoformat())
                 if error and error.startswith("bloqueada"):
                     # nos frenó: la dejamos descansar antes de volver a pedirle nada
@@ -163,6 +171,7 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
     if hacer_feeds:
         cli = Cliente(pausa=(2.0, 4.0))
         foros = cfg.get("foros") or {}
+        vistos: set[str] = set()   # el mismo post sale en varios feeds (Computing y el de la tienda)
         for fuente, parser in (("ozbargain", feeds.parsear_ozbargain),):
             for url in foros.get(fuente, []):
                 try:
@@ -175,6 +184,9 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
                 pcs = cfg.get("pcs") or {}
                 palabras_pc = pcs.get("palabras_ozbargain") if pcs.get("activo") else None
                 for p in posts:
+                    if p.id in vistos:
+                        continue
+                    vistos.add(p.id)
                     modelos = feeds.modelos_del_post(p, palabras_pc)
                     info = db.guardar_post(p, [o.modelo for o in modelos])
                     nuevos = motor.evaluar_post(p, info, modelos)

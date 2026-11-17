@@ -65,8 +65,62 @@ def parsear_ozbargain(xml: str) -> list[Post]:
             url_tienda=meta.get("url") if meta is not None else None,
             precio=precio_en_titulo(titulo), moneda="AUD",
             etiquetas=[c.text or "" for c in item.findall("category")],
-            expira=_fecha(meta.get("expiry")) if meta is not None else None, estados=estados))
+            expira=_fecha(meta.get("expiry")) if meta is not None else None, estados=estados,
+            descripcion=RE_TAGS.sub(" ", html.unescape(item.findtext("description", "") or "")).strip()[:600]))
     return posts
+
+
+# ------------------------------------------------------------------ códigos de descuento
+
+RE_TAGS = re.compile(r"<[^>]+>")
+RE_CODIGO = re.compile(r"\b(?:PROMO\s*CODE|DISCOUNT\s*CODE|COUPON\s*CODE|VOUCHER\s*CODE|COUPON|CODE)\s*[:\-]?\s*"
+                       r"[\"'“”‘’]?([A-Z0-9]{4,20})\b")
+NO_ES_CODIGO = {"REQUIRED", "NEEDED", "APPLIED", "BELOW", "CHECKOUT", "WORKS", "STACK", "STACKS", "ONLY",
+                "EBAY", "WITH", "FROM", "INSIDE", "HERE", "AUTO", "APPLY", "SHOWN", "LISTED", "EXPIRED"}
+RE_PCT_OFF = re.compile(r"(?<![\d.])(\d{1,2})\s*%\s*OFF")
+RE_TOPE = re.compile(r"(?:MAX(?:IMUM)?|CAPPED AT|CAP(?:PED)?|UP TO)\s*(?:DISCOUNT\s*)?(?:OF\s*)?A?\$\s?(\d[\d,]*)")
+RE_MIN_GASTO = re.compile(r"MIN(?:IMUM)?\.?\s*(?:SPEND|PURCHASE|ORDER)?\s*(?:OF\s*)?A?\$\s?(\d[\d,]*)")
+# "$2,399 with code", "$2,399 after code": el precio del título YA tiene el código aplicado
+RE_YA_APLICADO = re.compile(r"\$\s?[\d,]+(?:\.\d{2})?\s*(?:\([^)]*\)\s*)?(?:DELIVERED\s*)?"
+                            r"(?:WITH|AFTER|USING|W/|VIA)\s*(?:THE\s*)?(?:\w+\s*)?(?:CODE|COUPON)")
+
+
+def codigo_descuento(p: Post) -> dict | None:
+    """Del título (o, si no está ahí, de la descripción) del post: {'codigo', 'pct', 'tope', 'minimo'}."""
+    for texto in (p.titulo, p.descripcion):
+        t = (texto or "").upper()
+        for m in RE_CODIGO.finditer(t):
+            cod = m.group(1)
+            if cod in NO_ES_CODIGO or cod.isdigit():
+                continue
+            todo = f"{(p.titulo or '').upper()} {(p.descripcion or '').upper()}"
+            pct = RE_PCT_OFF.search(t) or RE_PCT_OFF.search(todo)
+            tope = RE_TOPE.search(todo)
+            minimo = RE_MIN_GASTO.search(todo)
+            return {"codigo": cod, "pct": int(pct.group(1)) if pct else None,
+                    "tope": float(tope.group(1).replace(",", "")) if tope else None,
+                    "minimo": float(minimo.group(1).replace(",", "")) if minimo else None}
+    return None
+
+
+def precio_con_codigo(p: Post) -> tuple[float | None, dict | None, bool]:
+    """(precio final, código, ¿lo apliqué yo?). Si el título ya muestra el precio con el código
+    ("$2,399 with code X") se deja como está; si dice "Extra 20% off with code X" se descuenta."""
+    cod = codigo_descuento(p)
+    if not p.precio or not cod or not cod.get("pct"):
+        return p.precio, cod, False
+    if RE_YA_APLICADO.search(p.titulo.upper()):
+        return p.precio, cod, False
+    descuento = p.precio * cod["pct"] / 100
+    if cod.get("tope"):
+        descuento = min(descuento, cod["tope"])
+    return round(p.precio - descuento, 2), cod, True
+
+
+def es_codigo_ebay(p: Post, modelos: list) -> bool:
+    """Post de un código de eBay (no de un producto): '20% off Selected Sellers with code X @ eBay AU'."""
+    de_ebay = "ebay." in (p.url_tienda or "").lower() or "@ EBAY" in p.titulo.upper()
+    return de_ebay and not modelos and (cod := codigo_descuento(p)) is not None and cod.get("pct") is not None
 
 
 def vigente(p: Post, ahora: datetime | None = None, max_dias: int = MAX_DIAS_POST) -> tuple[bool, str | None]:
@@ -104,14 +158,14 @@ def es_pc(titulo: str, palabras: list[str] | None) -> bool:
 
 
 def modelos_del_post(p: Post, palabras_pc: list[str] | None = None) -> list[Oferta]:
-    """Prueba el título con cada parser (placa, CPU, RAM) y devuelve las coincidencias.
+    """Prueba el título con cada parser (placa, CPU, RAM, SSD) y devuelve las coincidencias.
     Si es una PC armada, la devuelve como tal (categoría "pcs") y no como sus componentes."""
     if es_pc(p.titulo, palabras_pc):
         o = normalizar(Oferta(tienda=p.fuente, pais="AU", categoria="pcs", titulo=p.titulo, url=p.url,
                               precio=p.precio or 0, moneda="AUD"))
         return [o] if o.modelo and not o.descartada else []
     salida = []
-    for cat in ("placas", "cpu", "ram"):
+    for cat in ("placas", "cpu", "ram", "ssd"):
         o = normalizar(Oferta(tienda=p.fuente, pais="AU", categoria=cat, titulo=p.titulo, url=p.url,
                               precio=p.precio or 0, moneda="AUD"))
         if o.modelo and not o.descartada:

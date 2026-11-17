@@ -83,6 +83,17 @@ class DB:
         return {"id": oid, "nueva": False, "precio_antes": fila["precio"],
                 "stock_antes": None if fila["stock"] is None else bool(fila["stock"])}
 
+    def marcar_sin_stock(self, tienda: str, antes: datetime) -> int:
+        """Lo que la tienda tenía con stock y en esta lectura ya no apareció: queda sin stock
+        (así, si vuelve, se sabe que 'volvió a tener stock')."""
+        filas = self.c.execute("SELECT id, precio, precio_lista FROM ofertas WHERE tienda=? AND ultima_vez<? "
+                               "AND stock=1", (tienda, _iso(antes))).fetchall()
+        for f in filas:
+            self.c.execute("UPDATE ofertas SET stock=0 WHERE id=?", (f["id"],))
+            self.c.execute("INSERT INTO precios VALUES(?,?,?,?,?)", (f["id"], _iso(antes), f["precio"],
+                                                                    f["precio_lista"], 0))
+        return len(filas)
+
     def marcar_sospechoso(self, oferta_id: int, valor: bool):
         self.c.execute("UPDATE ofertas SET sospechoso=? WHERE id=?", (int(valor), oferta_id))
 

@@ -20,7 +20,7 @@ lee OzBargain y me avisa **solo** de lo que pasa mis filtros de `config.yaml`.
      ≈ USD 974 ≈ $1.546.994 (MEP $1.589)
   🇦🇷 Mejor precio: Venex $2.319.990 contado (mismo chip)
   💰 Diferencia: ~$772.996 más barato en 🇦🇺 (33%)
-  🛃 Si se declara en aduana (50% sobre lo que pase de USD 500): ~$1.923.267 → ~$396.723 más barato
+  🛃 Traído con valija extra (A$150) y aduana declarada (50% sobre lo que pase de USD 500): ~$2.085.384 → ~$234.606 más barato
   ✅ Veredicto: conviene
   ```
 
@@ -29,12 +29,18 @@ lee OzBargain y me avisa **solo** de lo que pasa mis filtros de `config.yaml`.
     guardada y el aviso lo aclara ("⚠️ Cotización guardada: MEP del 16/11 14:00").
   - **Cuenta**: A$ × AUD/USD = USD; USD × MEP = pesos. No se descuenta el reintegro del TRS (el GST).
     Aduana: 50% de lo que pase de USD 500. Ojo: la franquicia es **por viajero y por viaje**, no por
-    producto.
+    producto. A todo lo que se trae de 🇦🇺 se le suma una valija extra (`general.valija_extra_aud`,
+    A$150 por defecto).
   - **Equivalente**: placas, el mismo chip y la misma VRAM de cualquier marca; CPU, el mismo modelo;
     RAM, la misma capacidad, cantidad de módulos y velocidad; PCs, la misma placa y la misma cantidad
     de RAM. Si no está, se usa el más parecido y se marca "aprox." (por ejemplo "CL36 en vez de CL30").
-  - **Veredicto** (con aduana): "conviene" si traerlo sale más de 10% más barato, "casi igual" entre
-    0 y 10%, "no conviene" si sale más caro.
+  - **Veredicto** (con valija y aduana): "conviene" si traerlo sale más de 10% más barato, "casi igual"
+    entre 0 y 10%, "no conviene" si sale más caro.
+  - **PCs armadas de 🇦🇺**: se comparan contra lo que sale armarla en 🇦🇷 por partes (la placa, el
+    procesador, la RAM y el SSD más baratos de las tiendas que leemos, más `pcs.resto_estimado_ars`
+    por mother + fuente + gabinete, que es un **estimado**). Si falta alguna parte se usa la PC armada
+    parecida. Como es para DaVinci Resolve, avisa ⚠️ si el procesador tiene menos de 12 núcleos o el
+    SSD es de menos de 2TB (`pcs.davinci`).
 - **Resumen diario** a las 12:00 hora argentina (sección `resumen_diario` de `config.yaml`): un
   mensaje con el mejor precio de hoy en 🇦🇷 y 🇦🇺 de cada producto, pasado a pesos y con la diferencia
   entre países. Sale en la primera corrida desde esa hora; para verlo ya: `python -m bot resumen --dry-run`.
@@ -184,6 +190,17 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
    *Actions: read and write* solo sobre este repo, y un cron cada 10 minutos que haga
    `POST https://api.github.com/repos/<usuario>/<repo>/actions/workflows/bot.yml/dispatches`
    con el cuerpo `{"ref":"main"}`.
+5. **eBay** (opcional; sin esto eBay no se lee y no pasa nada):
+   1. Entrá a <https://developer.ebay.com>, registrate con tu cuenta de eBay y esperá el mail de
+      aprobación (suele ser en el día).
+   2. *Application Keys* → creá un keyset de **Production**. El *App ID* es el Client ID y el
+      *Cert ID* es el Client Secret.
+   3. eBay pide, para activar el keyset, que digas qué hacés con las notificaciones de "cuenta
+      borrada": elegí que **no guardás datos de usuarios de eBay** (pedí la exención). El bot solo
+      usa la búsqueda pública.
+   4. Cargalos sin que queden en ningún archivo del repo:
+      `gh secret set EBAY_CLIENT_ID` y `gh secret set EBAY_CLIENT_SECRET` (te los pide por teclado),
+      y en tu `.env` local para probar en la PC.
 
 ## Tiendas conectadas
 
@@ -197,6 +214,9 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
 | Venex | 🇦🇷 | listados de 12 (`?page=N`) | precio contado efectivo. El listado no informa stock ni precio de lista |
 | Gezatek | 🇦🇷 | listados (`?page=N`) | "Precio Geza" (transferencia), precio con Mercado Pago como lista, y stock |
 | Mexx | 🇦🇷 | cada categoría en una página (`?all=1`) | "Mejor precio" (efectivo/transferencia) y stock |
+| Maximus | 🇦🇷 | listados (`PAGE=N`) | precio transferencia, precio de lista y stock (del JSON-LD de la página) |
+| HardGamers | 🇦🇷 | comparador: listados de 54 ordenados por precio | cubre unas 45 tiendas, entre ellas **FullH4rd** (que nos bloquea). **Katech y Compra Gamer no están**. El aviso muestra la tienda real; las que ya leemos directo se saltean. Lee una categoría por corrida y solo la franja de precios que importa (búsqueda binaria), con 5–7 s entre pedidos |
+| eBay AU | 🇦🇺 | API oficial (Browse) | PCs nuevas de vendedores en Australia, con RTX 5070 Ti o más y Ryzen 7/9 o Core i7/i9/Ultra 7/9. Sigue a la **HP Official Store** (`hp_official`, confirmalo en su tienda de eBay): avisa si baja o si vuelve a tener stock un OMEN/Victus. Necesita las claves (ver arriba) |
 
 - **Categorías de la Fase 2** (mothers, SSD, fuentes, refrigeración): se guardan pero todavía no
   avisan. Se leen cada 6 h y de a una por corrida, para no cargar a las tiendas.
@@ -208,6 +228,12 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
   lado cuando la tienda lo muestra en el listado (Compra Gamer y Gezatek). Ninguna de las cinco
   muestra las cuotas sin interés en el listado, así que por ahora no aparecen en los avisos (leerlas
   implicaría pedir la ficha de cada producto, cientos de pedidos por corrida).
+- **OzBargain**: además del feed de *Computing*, se leen los de Amazon AU, eBay AU, Scorptec,
+  PC Case Gear y JB Hi-Fi (los posts repetidos se saltean). Detecta PCs, placas, CPU, RAM y SSD.
+  Si un post trae un código ("Extra 20% off with code HPNOV26"), el precio de la cuenta es el
+  final con el código; los cupones de eBay sueltos avisan aparte y, si son de la tienda de HP, se
+  aplican a lo que se lea de ella en los 10 días siguientes.
+- **Black Friday** (`black_friday` en `config.yaml`, del 20/11 al 2/12): modo intensivo.
 - `robots.txt` se respeta con comodines (`Disallow: /*sort=*`), cosa que el lector de Python no hace.
 
 ## Fuentes que no se pueden leer
@@ -216,7 +242,7 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
 |---|---|---|
 | PC Case Gear, Scorptec | bloqueadas | Cloudflare pide verificación. Se cubren con staticICE y OzBargain |
 | Centre Com | bloqueada | AWS WAF "Human Verification" |
-| FullH4rd | bloqueada | Cloudflare contesta 403 "Your request was blocked" |
+| FullH4rd | bloqueada | Cloudflare contesta 403 "Your request was blocked". Se cubre con HardGamers |
 | Mwave (directo) | 429 | Shopify contesta "demasiados pedidos" aun con 1 pedido cada 15 min. Se cubre con staticICE |
 | Computer & Parts Land (directo) | bloqueada | Cloudflare. Sus precios en staticICE se filtran si están desfasados |
 | Reddit | fuera de la Fase 1 | RSS cortado el 13/11/2026, API sin acceso nuevo desde el 31/10/2026 y `robots.txt` con `Disallow: /` |

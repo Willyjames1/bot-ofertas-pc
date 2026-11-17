@@ -99,9 +99,11 @@ def test_aviso_au_con_comparacion_aduana_y_veredicto():
     assert "≈ USD 976 ≈ $1.539.590 (MEP $1.577)" in t
     assert "Compra Gamer</a> $2.244.000 (mismo chip)" in t
     assert "💰 Diferencia: ~$704.410 más barato en 🇦🇺 (31%)" in t
-    # aduana: 50% de (976,28 − 500) USD × 1577 = $375.544 → traído $1.915.134
-    assert "🛃 Si se declara en aduana (50% sobre lo que pase de USD 500): ~$1.915.134 → ~$328.866 más barato" in t
-    assert "✅ Veredicto: conviene" in t and "Ver en la tienda" in t
+    # aduana: 50% de (976,28 − 500) USD × 1577 = $375.544; valija A$150 = $160.263 → traído $2.075.397
+    assert ("🛃 Traído con valija extra (A$150) y aduana declarada (50% sobre lo que pase de USD 500): "
+            "~$2.075.397 → ~$168.603 más barato") in t
+    # 7,5% más barato traído: entre 0 y 10% es "casi igual"
+    assert "🟰 Veredicto: casi igual" in t and "Ver en la tienda" in t
 
 
 def test_aviso_ar_invertido():
@@ -166,7 +168,7 @@ def test_resumen_diario():
     bloques = t.split("\n\n")
     placa = next(b for b in bloques if "RTX 5070 Ti</b>" in b)
     assert "🇦🇷 $2.244.000 · " in placa and "🇦🇺 A$1.441 ≈ $1.539.590 · " in placa
-    assert "→ 31% más barato en 🇦🇺 (con aduana: 15% más barato traído)" in placa
+    assert "→ 31% más barato en 🇦🇺 (con valija y aduana: 8% más barato traído)" in placa
     cpu = next(b for b in bloques if "9900X" in b)
     assert "🇦🇷 sin precio hoy" in cpu and "→" not in cpu
     assert any("PC armada con RTX 5070 Ti" in b for b in bloques)

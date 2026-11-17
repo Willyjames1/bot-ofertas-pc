@@ -54,3 +54,4 @@ class Post:
     etiquetas: list[str] = field(default_factory=list)
     expira: datetime | None = None                       # OzBargain: fecha de vencimiento del deal
     estados: list[str] = field(default_factory=list)     # OzBargain: expired, outofstock, upcoming...
+    descripcion: str = ""                                # primer párrafo del post, sin HTML

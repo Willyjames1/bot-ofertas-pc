@@ -357,7 +357,89 @@ def parsear_pc(o: Oferta, t: str) -> None:
         o.descartada = "PC sin placa de video reconocible"
         return
     o.modelo = f"PC {chip}"
-    o.datos = {"chip": chip, "fabricante": "NVIDIA" if chip.startswith("RTX") else "AMD", "ram_gb": ram_de_pc(t)}
+    o.datos = {"chip": chip, "fabricante": "NVIDIA" if chip.startswith("RTX") else "AMD", "ram_gb": ram_de_pc(t),
+               "ssd_tb": ssd_de_pc(t), **cpu_de_pc(t)}
+
+
+def cpu_de_pc(t: str) -> dict:
+    """Procesador de una PC armada: {'cpu': 'Ryzen 7 9800X3D', 'nucleos': 8, 'cpu_marca': 'AMD',
+    'cpu_tier': 7} o {} si el título no lo dice (o es de una generación que no seguimos)."""
+    tmp = Oferta(tienda="", pais="", categoria="cpu", titulo=t, url="", precio=0, moneda="")
+    parsear_cpu(tmp, t)
+    if tmp.descartada or not tmp.modelo:
+        if m := re.search(r"\bI([3579])[- ]?(1[23]\d{3})", t):   # Core i7-12700 / 13700: tier sin núcleos
+            return {"cpu": f"Core i{m.group(1)}-{m.group(2)}", "cpu_marca": "Intel", "cpu_tier": int(m.group(1)),
+                    "nucleos": None}
+        return {}
+    tier = re.search(r"(?:Ryzen|Ultra|i)\s?(\d)", tmp.modelo)
+    return {"cpu": tmp.modelo, "nucleos": tmp.datos.get("nucleos"), "cpu_marca": tmp.datos.get("marca"),
+            "cpu_tier": int(tier.group(1)) if tier else None}
+
+
+RE_TB_PC = _r(r"(?<![\d.])(\d)\s*TB\b")
+RE_GB_DISCO_PC = _r(r"(?<![\d.])(256|500|512|1000|2000)\s*GB\s*(?:M\.2\s*)?(?:SSD|NVME|M\.2|PCIE)")
+
+
+def ssd_de_pc(t: str) -> float | None:
+    """Disco de una PC armada en TB ('2TB NVMe' → 2, '512GB SSD' → 0.5)."""
+    if m := RE_TB_PC.search(t):
+        return float(m.group(1))
+    if m := RE_GB_DISCO_PC.search(t):
+        return round(int(m.group(1)) / 1000, 1) if int(m.group(1)) >= 1000 else 0.5
+    return None
+
+
+# ---------------------------------------------------------------- SSD
+
+SSD_NO = _r(r"\b(PORTABLE|PORTATIL|EXTERN[OA]|EXTERNAL|USB|ENCLOSURE|CARRY|DOCK|GABINETE|ADAPTADOR|"
+            r"ADAPTER|MICRO ?SD|SD CARD|MEMORY CARD|PENDRIVE|FLASH DRIVE|HDD|DISCO RIGIDO|HARD DRIVE|"
+            r"CADDY)\b")
+SSD_SI = _r(r"\b(SSD|NVME|M\.2|SOLIDO|SOLID STATE)\b")
+RE_SSD_TB = _r(r"(?<![\d.])(\d(?:[.,]\d)?)\s*TB\b")
+RE_SSD_GB = _r(r"(?<![\d.])(240|250|256|480|500|512|960|1000|2000|4000)\s*GB\b")
+RE_SSD_GEN = _r(r"\b(?:PCIE|PCI-?E|GEN)\s*(?:GEN\s*)?([345])(?:\.0)?(?:\s*X4)?\b")
+# líneas conocidas, por si el título no dice la generación
+LINEAS_SSD = [("9100 PRO", "Samsung", 5), ("990 PRO", "Samsung", 4), ("990 EVO", "Samsung", 4),
+              ("980 PRO", "Samsung", 4), ("870 EVO", "Samsung", 0), ("SN8100", "WD", 5), ("SN850X", "WD", 4),
+              ("SN7100", "WD", 4), ("SN770", "WD", 4), ("SN5000", "WD", 4), ("SN580", "WD", 4),
+              ("T705", "Crucial", 5), ("T700", "Crucial", 5), ("T710", "Crucial", 5), ("T500", "Crucial", 4),
+              ("P510", "Crucial", 5), ("P310", "Crucial", 4), ("P3 PLUS", "Crucial", 4), ("MX500", "Crucial", 0),
+              ("KC3000", "Kingston", 4), ("FURY RENEGADE", "Kingston", 4), ("NV3", "Kingston", 4),
+              ("NV2", "Kingston", 4), ("MP700", "Corsair", 5), ("MP600", "Corsair", 4),
+              ("FIRECUDA 540", "Seagate", 5), ("FIRECUDA 530", "Seagate", 4), ("SX8200", "ADATA", 3),
+              ("LEGEND 960", "ADATA", 4), ("LEGEND 900", "ADATA", 4), ("P5 PLUS", "Crucial", 4)]
+MARCAS_SSD = [("SAMSUNG", "Samsung"), ("WD_BLACK", "WD"), ("WD ", "WD"), ("WESTERN DIGITAL", "WD"),
+              ("CRUCIAL", "Crucial"), ("KINGSTON", "Kingston"), ("CORSAIR", "Corsair"), ("SEAGATE", "Seagate"),
+              ("ADATA", "ADATA"), ("XPG", "ADATA"), ("LEXAR", "Lexar"), ("SOLIDIGM", "Solidigm"),
+              ("TEAMGROUP", "TeamGroup"), ("TEAM GROUP", "TeamGroup"), ("HIKSEMI", "Hiksemi"), ("PNY", "PNY"),
+              ("SABRENT", "Sabrent"), ("MSI", "MSI"), ("GIGABYTE", "Gigabyte"), ("PATRIOT", "Patriot")]
+
+
+def parsear_ssd(o: Oferta, t: str) -> None:
+    """Modelo canónico "SSD NVMe Gen4 2TB" (o "SSD SATA 1TB"); la línea va en la variante."""
+    if SSD_NO.search(t):
+        o.descartada = "no es un SSD interno"
+        return
+    linea = next(((n, mar, g) for n, mar, g in LINEAS_SSD if n in t), None)
+    if not SSD_SI.search(t) and not linea:
+        o.descartada = "no es un SSD"
+        return
+    if m := RE_SSD_TB.search(t):
+        tb = float(m.group(1).replace(",", "."))
+    elif m := RE_SSD_GB.search(t):
+        tb = round(int(m.group(1)) / 1000, 2)
+    else:
+        o.descartada = "sin capacidad reconocible"
+        return
+    tb = {0.24: 0.25, 0.256: 0.25, 0.48: 0.5, 0.512: 0.5, 0.96: 1.0}.get(tb, tb)
+    marca = linea[1] if linea else next((v for k, v in MARCAS_SSD if k in t), None)
+    gen = int(m.group(1)) if (m := RE_SSD_GEN.search(t)) else (linea[2] or None if linea else None)
+    sata = ("SATA" in t and "NVME" not in t) or (linea is not None and linea[2] == 0)
+    interfaz = "SATA" if sata else "NVMe"
+    cap = f"{int(tb)}TB" if tb >= 1 and tb == int(tb) else f"{tb:g}TB" if tb >= 1 else f"{int(tb * 1000)}GB"
+    o.modelo = f"SSD SATA {cap}" if sata else (f"SSD NVMe Gen{gen} {cap}" if gen else f"SSD NVMe {cap}")
+    o.variante = " ".join(x for x in (marca, linea[0] if linea else None) if x) or None
+    o.datos = {"capacidad_tb": tb, "interfaz": interfaz, "gen": None if sata else gen, "marca": marca}
 
 
 RAM_PC_VALIDAS = {8, 16, 24, 32, 48, 64, 96, 128}
@@ -382,7 +464,8 @@ def ram_de_pc(t: str) -> int | None:
 
 # ---------------------------------------------------------------- entrada principal
 
-PARSERS = {"placas": parsear_placa, "cpu": parsear_cpu, "ram": parsear_ram, "pcs": parsear_pc}
+PARSERS = {"placas": parsear_placa, "cpu": parsear_cpu, "ram": parsear_ram, "pcs": parsear_pc,
+           "ssd": parsear_ssd}
 
 
 def normalizar(o: Oferta) -> Oferta:

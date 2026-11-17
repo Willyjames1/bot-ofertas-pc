@@ -50,7 +50,28 @@ pcs:
   activo: true
   gpu_min: RTX 5070 Ti
   objetivo: {AUD: 3000, ARS: 4000000}
-  palabras_ozbargain: [gaming PC, desktop, prebuilt]
+  # (OMEN y Victus: las de HP; cuentan solo si el título trae una placa y no dice laptop)
+  palabras_ozbargain: [gaming PC, desktop, prebuilt, OMEN, Victus]
+  # Comparación con Argentina: la PC australiana se compara contra lo que sale armarla acá por
+  # partes (placa + CPU + RAM + SSD de las tiendas que leemos) más esto, que no seguimos:
+  resto_estimado_ars: 550000   # mother + fuente + gabinete, estimado: ajustalo si cambia
+  # Es para editar en DaVinci Resolve: ⚠️ si el procesador o el disco quedan cortos
+  davinci: {nucleos_min: 12, ssd_min_tb: 2}
+
+# PCs armadas en eBay Australia (API oficial "Browse"). Solo vendedores de Australia, nuevas,
+# con placa pcs.gpu_min o superior y procesador Ryzen 7/9, Core i7/i9 o Core Ultra 7/9.
+# Hacen falta EBAY_CLIENT_ID y EBAY_CLIENT_SECRET (ver README); sin eso, eBay no se lee.
+ebay:
+  activo: true
+  busquedas: [RTX 5070 Ti, RTX 5080, RTX 5090]
+  categoria: 179            # "PC Desktops & All-In-One Computers"
+  precio_max_aud: 6000
+  cpu_tier_min: 7           # Ryzen 7 / Core i7 / Core Ultra 7 o más
+  # vendedores que se siguen de cerca: avisan también si bajan de precio o vuelven a tener stock.
+  # usuario de eBay: nombre para mostrar
+  vendedores_seguidos:
+    hp_official: HP Official Store
+  modelos_seguidos: [OMEN, Victus]   # qué buscar en esos vendedores
 
 # Resumen diario: un mensaje por día (desde esta hora, hora argentina) con el mejor precio de
 # hoy en 🇦🇷 y 🇦🇺 de cada producto, pasado a pesos y con la diferencia entre países.
@@ -66,6 +87,7 @@ resumen_diario:
     pcs: [RTX 5070 Ti]
 
 mothers: {activo: true, chipsets: [B850, X870, X870E], wifi: true}
+# SSD: los posts de OzBargain avisan (por votos u objetivo); en las tiendas todavía no.
 ssd: {activo: true, capacidad_tb: [2, 4], gen_min: 4}
 fuentes: {activo: true, watts_min: 850, certificacion_min: Gold, atx3: true}
 refrigeracion: {activo: true, tipos: [AIO 360, AIO 280]}
@@ -85,6 +107,8 @@ general:
   marketplaces: [ebay, catch.com.au, mydeal, kogan marketplace, amazon marketplace]
   # excepciones: tiendas oficiales dentro de un marketplace (se reconocen por el "@ ..." del título)
   marketplaces_permitidos: [HP eBay]
+  # Traerlo de Australia: una valija extra en el avión, además de la aduana declarada
+  valija_extra_aud: 150
 
 # ------------------------------------------------------------
 #  Ajustes técnicos (normalmente no hace falta tocarlos)
@@ -102,8 +126,8 @@ frecuencia:
   pausa_si_bloquea_horas: 2      # si una tienda nos frena (captcha, 429, 404 falso), descansa 2 h
 
 black_friday:
-  desde: 2026-11-23
-  hasta: 2026-12-01
+  desde: 2026-11-20
+  hasta: 2026-12-02
   feeds_cada_min: 10
   tiendas_cada_min: 20
   votos_ozbargain_urgente: 15
@@ -112,4 +136,10 @@ black_friday:
 foros:
   ozbargain:
     - https://www.ozbargain.com.au/cat/computing/deals/feed
+    # por tienda: muchas ofertas de Amazon, eBay y JB Hi-Fi no caen en "Computing"
+    - https://www.ozbargain.com.au/deals/amazon.com.au/feed
+    - https://www.ozbargain.com.au/deals/ebay.com.au/feed
+    - https://www.ozbargain.com.au/deals/scorptec.com.au/feed
+    - https://www.ozbargain.com.au/deals/pccasegear.com/feed
+    - https://www.ozbargain.com.au/deals/jbhifi.com.au/feed
   # Reddit quedó afuera de la Fase 1 (RSS cortado el 13/11/2026, API sin acceso nuevo).

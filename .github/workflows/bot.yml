@@ -57,6 +57,8 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID_YO: ${{ secrets.TELEGRAM_CHAT_ID_YO }}
           TELEGRAM_CHAT_ID_HERMANO: ${{ secrets.TELEGRAM_CHAT_ID_HERMANO }}
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
           BOT_DB: datos/precios.db
         run: python -m bot correr
 

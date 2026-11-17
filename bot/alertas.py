@@ -12,10 +12,10 @@ from zoneinfo import ZoneInfo
 
 from . import perf
 from .config import TZ_AR, Secretos
-from .comparar import lineas_comparacion
+from .comparar import aviso_davinci, lineas_comparacion
 from .cotizaciones import Cotizacion, ars
 from .db import DB
-from .feeds import vigente
+from .feeds import codigo_descuento, es_codigo_ebay, precio_con_codigo, vigente
 from .modelos import Oferta, Post
 from .normalizar import canon, parsear_chip_config
 from .telegram import Telegram
@@ -27,6 +27,9 @@ ICONO = {"placas": "🎮 PLACA", "cpu": "🧠 CPU", "ram": "💾 RAM", "mothers"
          "pcs": "🖥️ PC ARMADA"}
 BANDERA = {"AU": "🇦🇺", "AR": "🇦🇷"}
 NOMBRE_TIENDA: dict[str, str] = {}  # lo completa corrida.py con los nombres lindos
+# Fase 2: de las tiendas se guardan los precios, pero solo avisan si hay un objetivo puesto
+SOLO_OBJETIVO = {"ssd", "mothers", "fuentes", "refrigeracion", "gabinetes", "monitores"}
+CODIGOS_DIAS = 10   # un código de OzBargain se aplica durante 10 días (o hasta que vence el post)
 
 
 @dataclass
@@ -128,6 +131,11 @@ def pasa_filtros(cfg: dict, categoria: str, modelo: str | None, datos: dict, pre
             return False
         if (lista := c.get("modelos")) and canon(modelo) not in {canon(x) for x in lista}:
             return False
+    elif categoria == "ssd":
+        if (caps := c.get("capacidad_tb")) and datos.get("capacidad_tb") not in caps:
+            return False
+        if (gmin := c.get("gen_min")) and (datos.get("interfaz") == "SATA" or (datos.get("gen") or gmin) < gmin):
+            return False
     elif categoria == "ram":
         if (caps := c.get("capacidad_gb")) and datos.get("capacidad_gb") not in caps:
             return False
@@ -168,8 +176,55 @@ class Motor:
 
     # -------------------------------------------------- textos
     def _comparacion(self, pais: str, categoria: str, modelo: str, datos: dict, precio: float) -> list[str]:
-        return lineas_comparacion(self.db, self.cot, pais, categoria, modelo, datos, precio,
-                                  NOMBRE_TIENDA, self.inicio)
+        lineas = lineas_comparacion(self.db, self.cot, pais, categoria, modelo, datos, precio,
+                                    NOMBRE_TIENDA, self.inicio, self.cfg)
+        if categoria == "pcs" and (dv := aviso_davinci(self.cfg, datos)):
+            lineas.append(dv)
+        return lineas
+
+    # -------------------------------------------------- códigos de descuento (OzBargain)
+    def codigos(self) -> dict:
+        try:
+            return json.loads(self.db.get("codigos_ebay", "{}"))
+        except ValueError:
+            return {}
+
+    def guardar_codigo(self, p: Post, cod: dict):
+        """Guarda un código visto en OzBargain para aplicarlo a lo que leemos de eBay."""
+        todos = self.codigos()
+        vendedor = None
+        t = p.titulo.upper()
+        for usuario, nombre in ((self.cfg.get("ebay") or {}).get("vendedores_seguidos") or {}).items():
+            marca = nombre.split()[0].upper()   # "HP Official Store" -> "HP"
+            if f"@ {marca} EBAY" in t or f"{marca} OFFICIAL" in t:
+                vendedor = usuario
+        vence = p.expira or (self.inicio + timedelta(days=CODIGOS_DIAS))
+        todos[cod["codigo"]] = {**cod, "vendedor": vendedor, "post": p.url, "vence": vence.isoformat()}
+        self.db.set("codigos_ebay", json.dumps(todos, ensure_ascii=False))
+
+    def codigo_para(self, o: Oferta) -> dict | None:
+        """El mejor código vigente que aplica a este producto de eBay (del vendedor o de todo eBay)."""
+        if o.datos.get("via") != "eBay":
+            return None
+        mejores = []
+        for cod in self.codigos().values():
+            if datetime.fromisoformat(cod["vence"]) < self.inicio or not cod.get("pct"):
+                continue
+            if cod.get("vendedor") not in (None, o.datos.get("vendedor")):
+                continue
+            if cod.get("vendedor") is None:
+                continue   # "selected sellers": no sabemos si entra; se muestra, no se aplica
+            if cod.get("minimo") and o.precio < cod["minimo"]:
+                continue
+            desc = min(o.precio * cod["pct"] / 100, cod.get("tope") or 1e12)
+            mejores.append((desc, cod))
+        return max(mejores, key=lambda x: x[0])[1] if mejores else None
+
+    @staticmethod
+    def con_codigo(precio: float, cod: dict | None) -> float:
+        if not cod:
+            return precio
+        return round(precio - min(precio * cod["pct"] / 100, cod.get("tope") or 1e12), 2)
 
     @staticmethod
     def _linea_precio(o: Oferta, tienda: str, precio_antes: float | None) -> str:
@@ -185,23 +240,30 @@ class Motor:
         return linea
 
     def texto_oferta(self, tipo: str, o: Oferta, precio_antes: float | None,
-                     minimo: float | None, objetivo: float | None) -> str:
+                     minimo: float | None, objetivo: float | None, codigo: dict | None = None) -> str:
         """tipo: 'objetivo' | 'minimo'. Formato:
         🔻 RTX 5070 Ti — bajó 15% en 🇦🇺 / precio y tienda / el otro país / diferencia / aduana / veredicto."""
         tienda = NOMBRE_TIENDA.get(o.tienda, o.tienda)
         bandera = BANDERA.get(o.pais, "")
         modelo = escape(o.modelo or "")
-        if precio_antes and precio_antes > o.precio:
+        final = self.con_codigo(o.precio, codigo)
+        if tipo == "stock":
+            cabeza = f"📦 <b>{modelo}</b> — volvió a tener stock en {bandera}"
+        elif precio_antes and precio_antes > o.precio:
             cabeza = f"🔻 <b>{modelo}</b> — bajó {(1 - o.precio / precio_antes) * 100:.0f}% en {bandera}"
         elif tipo == "objetivo":
             cabeza = f"🎯 <b>{modelo}</b> — bajo tu objetivo en {bandera}"
         else:
             cabeza = f"📉 <b>{modelo}</b> — nuevo mínimo histórico en {bandera}"
         lineas = [cabeza, self._linea_precio(o, tienda, precio_antes)]
-        lineas += self._comparacion(o.pais, o.categoria, o.modelo, o.datos, o.precio)
+        if codigo:
+            tope = f", tope {plata(codigo['tope'], o.moneda)}" if codigo.get("tope") else ""
+            lineas.append(f"🏷️ Con el código <b>{escape(codigo['codigo'])}</b> (−{codigo['pct']}%{tope}, visto en "
+                          f"OzBargain): <b>{plata(final, o.moneda)}</b> — la cuenta usa este precio")
+        lineas += self._comparacion(o.pais, o.categoria, o.modelo, o.datos, final)
         if o.cuotas:
             lineas.append(f"💳 {escape(o.cuotas)}")
-        extra = [bajo_objetivo(o.precio, objetivo, o.moneda)] if objetivo else []
+        extra = [bajo_objetivo(final, objetivo, o.moneda)] if objetivo else []
         if minimo and o.categoria != "pcs":
             extra.append(f"📉 Mín. histórico: {plata(minimo, o.moneda)}")
         if extra:
@@ -237,7 +299,7 @@ class Motor:
         tipo = None
         if objetivo and o.precio <= objetivo:
             tipo = "objetivo"
-        elif historial_ok and minimo and o.precio < minimo:
+        elif historial_ok and minimo and o.precio < minimo and o.categoria not in SOLO_OBJETIVO:
             tipo = "minimo"
 
         avisos: list[Aviso] = []
@@ -269,14 +331,29 @@ class Motor:
         """PCs armadas: cada una es distinta (CPU, RAM, disco), así que no hay mediana ni mínimo
         histórico por modelo. Solo el objetivo, y la clave es el producto (su link)."""
         objetivo = objetivo_de(self.cfg, "pcs", o.modelo, o.datos, o.moneda)
-        if not objetivo or o.precio > objetivo:
+        cod = self.codigo_para(o)
+        final = self.con_codigo(o.precio, cod)
+        antes = info.get("precio_antes")
+        if o.datos.get("seguido"):
+            # vendedores seguidos (HP Official Store): también avisan si vuelven a tener stock o bajan
+            if info.get("stock_antes") is False and o.stock:
+                clave = f"stock|{o.url}|{self.inicio.date()}"
+                if not self.db.ultima_alerta(clave):
+                    return [Aviso("stock", clave, True, self.texto_oferta("stock", o, None, None, objetivo, cod),
+                                  o.pais, final)]
+            if antes and o.precio <= antes * (1 - self.aj.get("baja_minima_pct", 5) / 100):
+                clave = f"baja|{o.url}|{o.precio}"
+                if not self.db.ultima_alerta(clave):
+                    return [Aviso("baja_seguido", clave, True, self.texto_oferta("baja", o, antes, None, objetivo, cod),
+                                  o.pais, final)]
+        if not objetivo or final > objetivo:
             return []
         clave = f"precio|{o.tienda}|{o.url}"
         ult = self.db.ultima_alerta(clave)
-        if ult is not None and ult["precio"] and o.precio > ult["precio"] * (1 - self.aj["re_aviso_baja_pct"] / 100):
+        if ult is not None and ult["precio"] and final > ult["precio"] * (1 - self.aj["re_aviso_baja_pct"] / 100):
             return []
-        texto = self.texto_oferta("objetivo", o, info.get("precio_antes"), None, objetivo)
-        return [Aviso("objetivo", clave, True, texto, o.pais, o.precio)]
+        texto = self.texto_oferta("objetivo", o, antes, None, objetivo, cod)
+        return [Aviso("objetivo", clave, True, texto, o.pais, final)]
 
     # -------------------------------------------------- oportunidades
     def evaluar_oportunidades(self) -> list[Aviso]:
@@ -321,6 +398,29 @@ class Motor:
         return avisos
 
     # -------------------------------------------------- foros
+    def evaluar_codigo_ebay(self, p: Post) -> list[Aviso]:
+        """Un código de eBay que salió en OzBargain: avisa una vez y lo guarda para aplicarlo."""
+        cod = codigo_descuento(p)
+        self.guardar_codigo(p, cod)
+        lineas = [f"🏷️ <b>Código de eBay</b> en OzBargain 🇦🇺: <b>{escape(cod['codigo'])}</b>",
+                  f"📝 {escape(p.titulo)}"]
+        partes = [f"−{cod['pct']}%"]
+        if cod.get("tope"):
+            partes.append(f"tope {plata(cod['tope'], 'AUD')}")
+        if cod.get("minimo"):
+            partes.append(f"compra mínima {plata(cod['minimo'], 'AUD')}")
+        if p.expira:
+            partes.append(f"vence {p.expira.astimezone(TZ_AR):%d/%m %H:%M} hora argentina")
+        lineas.append(" · ".join(partes))
+        guardado = self.codigos().get(cod["codigo"], {})
+        if guardado.get("vendedor"):
+            nombre = ((self.cfg.get("ebay") or {}).get("vendedores_seguidos") or {}).get(guardado["vendedor"])
+            lineas.append(f"✅ Lo aplico a lo que lea de {escape(nombre or guardado['vendedor'])} en eBay")
+        else:
+            lineas.append("ℹ️ Suele ser para vendedores seleccionados: confirmá en eBay si entra la PC que querés")
+        lineas.append(f'🔗 <a href="{escape(p.url)}">Ver el post</a>')
+        return [Aviso("codigo_ebay", f"codigo|{cod['codigo']}", True, "\n".join(lineas), "AU", None)]
+
     def evaluar_post(self, p: Post, info: dict, modelos: list[Oferta]) -> list[Aviso]:
         if info.get("notificado"):
             return []
@@ -328,6 +428,10 @@ class Motor:
         if not ok:  # expirado, agotado o viejo: ni alerta ni resumen
             log.debug("Ignoro post %s: %s", p.id, motivo_no)
             return []
+        if es_codigo_ebay(p, modelos):
+            return self.evaluar_codigo_ebay(p)
+        if (cod_post := codigo_descuento(p)) and cod_post.get("pct"):
+            self.guardar_codigo(p, cod_post)   # ej. "Extra 20% off with code HPNOV26 @ HP eBay"
         if es_marketplace(self.cfg, p):
             log.debug("Ignoro post %s: marketplace", p.id)
             return []
@@ -337,11 +441,12 @@ class Motor:
             return []
         o = en_filtros[0]
         objetivo = objetivo_de(self.cfg, o.categoria, o.modelo, o.datos, "AUD")
+        precio, cod, aplicado = precio_con_codigo(p)
         edad = datetime.now(timezone.utc) - p.publicado
         umbral = self.aj["votos_ozbargain_urgente"]
         motivo = None
         fuente = "OzBargain" if p.fuente == "ozbargain" else "Reddit"
-        if p.precio and objetivo and p.precio <= objetivo:
+        if precio and objetivo and precio <= objetivo:
             motivo = f"🎯 <b>{escape(o.modelo)}</b> — bajo tu objetivo en {fuente} 🇦🇺"
         elif o.categoria == "pcs":
             motivo = None  # PCs armadas: solo por precio, no por votos
@@ -357,11 +462,18 @@ class Motor:
             if p.precio:
                 tienda = f" @ {escape(p.titulo.rsplit(' @ ', 1)[1])}" if " @ " in p.titulo else ""
                 lineas.append(f"🇦🇺{tienda}: <b>{plata(p.precio, 'AUD')}</b>")
-                lineas += self._comparacion("AU", o.categoria, o.modelo, o.datos, p.precio)
-                lineas.append(bajo_objetivo(p.precio, objetivo, "AUD"))
+                if cod and aplicado:
+                    tope = f", tope {plata(cod['tope'], 'AUD')}" if cod.get("tope") else ""
+                    lineas.append(f"🏷️ Con el código <b>{escape(cod['codigo'])}</b> (−{cod['pct']}%{tope}): "
+                                  f"<b>{plata(precio, 'AUD')}</b> — la cuenta usa este precio")
+                elif cod:
+                    lineas.append(f"🏷️ Código <b>{escape(cod['codigo'])}</b> (el precio de arriba ya lo incluye)")
+                lineas += self._comparacion("AU", o.categoria, o.modelo, o.datos, precio)
+                if objetivo:
+                    lineas.append(bajo_objetivo(precio, objetivo, "AUD"))
             lineas.append(f'🔗 <a href="{escape(p.url)}">Ver el post</a>')
             return [Aviso("ozbargain" if p.fuente == "ozbargain" else "post_urgente",
-                          f"post|{p.fuente}|{p.id}", True, "\n".join(lineas), "AU", p.precio)]
+                          f"post|{p.fuente}|{p.id}", True, "\n".join(lineas), "AU", precio)]
         if info.get("nuevo"):
             return [Aviso("post", f"postnuevo|{p.fuente}|{p.id}", False,
                           f"[{fuente}] {p.titulo} ({p.votos if p.votos is not None else '?'} votos) {p.url}",

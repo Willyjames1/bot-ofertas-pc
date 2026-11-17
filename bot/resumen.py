@@ -9,7 +9,7 @@ from datetime import datetime, time, timezone
 from html import escape
 
 from .alertas import ICONO, NOMBRE_TIENDA, pasa_filtros, ram_cumple
-from .comparar import BANDERA, cuenta, plata
+from .comparar import BANDERA, cuenta, plata, valija_de
 from .config import TZ_AR
 from .cotizaciones import Cotizacion, ars
 from .db import DB
@@ -80,15 +80,16 @@ def texto(db: DB, cfg: dict, cot: Cotizacion | None, ahora: datetime | None = No
             else:
                 lineas.append(f"  {BANDERA['AU']} sin precio hoy")
             if ar and au and cot:
-                c = cuenta(cot, au["precio"], ar["precio"])
+                c = cuenta(cot, au["precio"], ar["precio"], valija_de(cfg))
                 if c.diferencia >= 0:
                     dif = f"{c.diferencia_pct:.0f}% más barato en {BANDERA['AU']}"
                 else:
                     dif = f"{-c.diferencia_pct:.0f}% más barato en {BANDERA['AR']}"
-                if c.aduana_ars > 0:
+                if c.aduana_ars > 0 or c.valija_ars > 0:
                     con = c.ahorro_con_aduana_pct
-                    dif += (f" (con aduana: {con:.0f}% más barato traído)" if con >= 0
-                            else f" (con aduana: {-con:.0f}% más caro traído)")
+                    que = "con valija y aduana" if c.aduana_ars > 0 and c.valija_ars > 0 else                         ("con valija" if c.valija_ars > 0 else "con aduana")
+                    dif += (f" ({que}: {con:.0f}% más barato traído)" if con >= 0
+                            else f" ({que}: {-con:.0f}% más caro traído)")
                 lineas.append(f"  → {dif}")
             bloques.append("\n".join(lineas))
     if cot and (nota := cot.nota_respaldo()):

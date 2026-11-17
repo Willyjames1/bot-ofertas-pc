@@ -5,8 +5,12 @@ Equivalente (mejor precio con stock del otro país, visto en las últimas 48 h):
   placas  mismo chip y misma VRAM, cualquier marca
   cpu     el mismo modelo
   ram     misma capacidad, módulos y velocidad (y CL; si el CL cambia, "aprox.")
+  ssd     misma capacidad y tipo (NVMe/SATA), y la generación más parecida
   pcs     la misma placa y la misma cantidad de RAM
-Si no está el mismo, se usa el más parecido y se marca "aprox."."""
+Si no está el mismo, se usa el más parecido y se marca "aprox.".
+
+Lo que viene de Australia se cuenta "traído": precio + una valija extra (general.valija_extra_aud)
++ aduana declarada. Una PC australiana se compara contra armarla en Argentina por partes."""
 from __future__ import annotations
 
 import json
@@ -110,6 +114,17 @@ def equivalente(db: DB, categoria: str, modelo: str, datos: dict, pais_otro: str
             return Equivalente(r, True, "misma capacidad, módulos y velocidad")
         return Equivalente(r, False, "aprox.: " + ", ".join(difs))
 
+    if categoria == "ssd":
+        cap, interfaz, gen = datos.get("capacidad_tb"), datos.get("interfaz"), _num(datos.get("gen"))
+        mismos = [r for r in filas if r["_d"].get("capacidad_tb") == cap and r["_d"].get("interfaz") == interfaz]
+        r = _mas_parecido(mismos, lambda r: abs((_num(r["_d"].get("gen")) or gen or 0) - (gen or 0)))
+        if not r:
+            return None
+        otra = _num(r["_d"].get("gen"))
+        if otra and gen and otra != gen:
+            return Equivalente(r, False, f"aprox.: Gen{otra} en vez de Gen{gen}")
+        return Equivalente(r, True, "misma capacidad y tipo")
+
     if categoria == "pcs":
         chip, ram = datos.get("chip"), _num(datos.get("ram_gb"))
         misma_placa = [r for r in filas if r["_d"].get("chip") == chip]
@@ -134,7 +149,8 @@ class Cuenta:
     au_ars: float          # convertido, sin aduana
     ar_ars: float
     aduana_ars: float      # 50% sobre lo que pase de USD 500
-    au_con_aduana: float
+    au_con_aduana: float   # traído: precio + valija + aduana
+    valija_ars: float = 0.0
 
     @property
     def diferencia(self) -> float:      # positivo = más barato en Australia
@@ -153,11 +169,84 @@ class Cuenta:
         return self.ahorro_con_aduana / self.ar_ars * 100
 
 
-def cuenta(cot: Cotizacion, precio_aud: float, precio_ars: float) -> Cuenta:
+def cuenta(cot: Cotizacion, precio_aud: float, precio_ars: float, valija_aud: float = 0) -> Cuenta:
+    """La aduana se calcula sobre el producto; la valija es lo que cobra la aerolínea."""
     u = cot.aud_a_usd(precio_aud)
     au_ars = cot.usd_a_ars(u)
     ad = cot.aduana_ars(u)
-    return Cuenta(precio_aud, u, au_ars, precio_ars, ad, au_ars + ad)
+    valija = cot.aud_a_ars(valija_aud)
+    return Cuenta(precio_aud, u, au_ars, precio_ars, ad, au_ars + ad + valija, valija)
+
+
+def valija_de(cfg: dict | None) -> float:
+    return float(((cfg or {}).get("general") or {}).get("valija_extra_aud") or 0)
+
+
+# ------------------------------------------------------------------ PCs por partes
+
+@dataclass
+class Partes:
+    total: float
+    detalle: list[str]       # "RTX 5070 Ti $2.244.000 (Compra Gamer)"
+    faltan: list[str]        # lo que no se encontró en Argentina
+
+
+def _mas_barata(db: DB, categoria: str, desde: datetime, cumple) -> dict | None:
+    for r in db.vigentes("AR", categoria, desde):   # ordenadas por precio
+        d = json.loads(r["datos"] or "{}")
+        if cumple(r["modelo"], d):
+            return dict(r)
+    return None
+
+
+def suma_partes(db: DB, cfg: dict | None, datos: dict, nombres: dict, ahora: datetime | None = None,
+                horas: int = HORAS_OTRO_PAIS) -> Partes:
+    """Lo que sale armar en Argentina la misma PC: la placa (mismo chip), el procesador (mismo
+    modelo), la RAM DDR5 (misma cantidad), el SSD (misma capacidad, NVMe) y un estimado para
+    mother, fuente y gabinete (pcs.resto_estimado_ars)."""
+    desde = (ahora or datetime.now(timezone.utc)) - timedelta(hours=horas)
+    pedidos = [
+        ("placas", datos.get("chip"), lambda m, d: d.get("chip") == datos.get("chip")),
+        ("cpu", datos.get("cpu"), lambda m, d: m == datos.get("cpu")),
+        ("ram", f"RAM {datos.get('ram_gb')}GB" if datos.get("ram_gb") else None,
+         lambda m, d: d.get("capacidad_gb") == datos.get("ram_gb")),
+        ("ssd", f"SSD {datos.get('ssd_tb'):g}TB" if datos.get("ssd_tb") else None,
+         lambda m, d: d.get("capacidad_tb") == datos.get("ssd_tb") and d.get("interfaz") == "NVMe"),
+    ]
+    total, detalle, faltan = 0.0, [], []
+    for cat, nombre, cumple in pedidos:
+        etiqueta = {"placas": "placa", "cpu": "procesador", "ram": "RAM", "ssd": "SSD"}[cat]
+        if not nombre:
+            faltan.append(f"{etiqueta} (la publicación no lo dice)")
+            continue
+        r = _mas_barata(db, cat, desde, cumple)
+        if not r:
+            faltan.append(f"{etiqueta} {nombre} (no lo vi en 🇦🇷)")
+            continue
+        total += r["precio"]
+        detalle.append(f"{escape(nombre)} {ars(r['precio'])} ({escape(nombres.get(r['tienda'], r['tienda']))})")
+    resto = float(((cfg or {}).get("pcs") or {}).get("resto_estimado_ars") or 0)
+    if resto:
+        total += resto
+        detalle.append(f"mother + fuente + gabinete ~{ars(resto)} (estimado)")
+    return Partes(total, detalle, faltan)
+
+
+def aviso_davinci(cfg: dict | None, datos: dict) -> str | None:
+    """⚠️ si la PC queda corta para editar en DaVinci Resolve (núcleos o disco)."""
+    dv = ((cfg or {}).get("pcs") or {}).get("davinci") or {}
+    nmin, smin = dv.get("nucleos_min", 12), dv.get("ssd_min_tb", 2)
+    faltas = []
+    n, ssd = datos.get("nucleos"), datos.get("ssd_tb")
+    if n is not None and n < nmin:
+        faltas.append(f"el procesador tiene {n} núcleos (menos de {nmin})")
+    elif n is None:
+        faltas.append("no dice cuántos núcleos tiene el procesador")
+    if ssd is not None and ssd < smin:
+        faltas.append(f"el SSD es de {ssd:g}TB (menos de {smin}TB)")
+    elif ssd is None:
+        faltas.append("no dice de cuánto es el SSD")
+    return ("⚠️ Para DaVinci: " + " · ".join(faltas)) if faltas else None
 
 
 def veredicto(c: Cuenta) -> str:
@@ -179,9 +268,11 @@ def _tienda(fila: dict, nombres: dict) -> str:
 
 
 def lineas_comparacion(db: DB, cot: Cotizacion | None, pais: str, categoria: str, modelo: str,
-                       datos: dict, precio: float, nombres: dict, ahora: datetime | None = None) -> list[str]:
-    """Las líneas que van debajo del precio: conversión, mejor precio del otro país, diferencia,
-    aduana y veredicto."""
+                       datos: dict, precio: float, nombres: dict, ahora: datetime | None = None,
+                       cfg: dict | None = None) -> list[str]:
+    """Las líneas que van debajo del precio: conversión, mejor precio del otro país (o, para una
+    PC australiana, armarla en Argentina por partes), diferencia, traerlo (valija + aduana) y
+    veredicto."""
     if not cot:
         return ["   (sin cotización: no pude convertir ni comparar)"]
     otro = OTRO[pais]
@@ -191,34 +282,53 @@ def lineas_comparacion(db: DB, cot: Cotizacion | None, pais: str, categoria: str
         lineas.append(f"   ≈ {usd(u)} ≈ {ars(cot.usd_a_ars(u))} (MEP {ars(cot.mep)})")
     else:
         lineas.append(f"   ≈ {usd(cot.ars_a_usd(precio))} (MEP {ars(cot.mep)})")
+    valija = valija_de(cfg)
     eq = equivalente(db, categoria, modelo, datos, otro, ahora)
-    if not eq:
-        lineas.append(f"{BANDERA[otro]} Sin precio para comparar en las tiendas que leo")
-    else:
+    partes = suma_partes(db, cfg, datos, nombres, ahora) if categoria == "pcs" and pais == "AU" else None
+    c = None
+    if partes and not partes.faltan:
+        lineas.append(f"{BANDERA['AR']} Armarla por partes en 🇦🇷: ~{ars(partes.total)}")
+        lineas.append("   " + " · ".join(partes.detalle))
+        if eq:
+            lineas.append(f"   (PC armada parecida en 🇦🇷: {_tienda(eq.fila, nombres)} {ars(eq.fila['precio'])}, "
+                          f"{escape(eq.nota)})")
+        c = cuenta(cot, precio, partes.total, valija)
+    elif partes:
+        lineas.append(f"{BANDERA['AR']} Por partes no se puede comparar: falta " + ", ".join(partes.faltan))
+    if c is None and not eq:
+        if not partes:
+            lineas.append(f"{BANDERA[otro]} Sin precio para comparar en las tiendas que leo")
+    elif c is None:
         f = eq.fila
         staticice = " · staticICE, confirmá stock" if eq.datos.get("via") == "staticICE" else ""
         if otro == "AR":
             tipo = f" {f['tipo_precio']}" if f.get("tipo_precio") in ("transferencia", "contado") else ""
             lineas.append(f"{BANDERA['AR']} Mejor precio: {_tienda(f, nombres)} {ars(f['precio'])}{tipo} "
                           f"({escape(eq.nota)})")
-            c = cuenta(cot, precio, f["precio"])
+            c = cuenta(cot, precio, f["precio"], valija)
         else:
             u = cot.aud_a_usd(f["precio"])
             lineas.append(f"{BANDERA['AU']} Mejor precio: {_tienda(f, nombres)} {plata(f['precio'], 'AUD')} "
                           f"≈ {usd(u)} ≈ {ars(cot.usd_a_ars(u))} ({escape(eq.nota)}{staticice})")
-            c = cuenta(cot, f["precio"], precio)
+            c = cuenta(cot, f["precio"], precio, valija)
+    if c is not None:
         if c.diferencia >= 0:
             lineas.append(f"💰 Diferencia: ~{ars(c.diferencia)} más barato en 🇦🇺 ({c.diferencia_pct:.0f}%)")
         else:
             lineas.append(f"💰 Diferencia: ~{ars(-c.diferencia)} más barato en 🇦🇷 ({-c.diferencia_pct:.0f}%)")
         regla = f"{ARANCEL * 100:.0f}% sobre lo que pase de USD {FRANQUICIA_USD}"
-        if c.aduana_ars <= 0:
+        sentido = "más barato" if c.ahorro_con_aduana >= 0 else "más caro"
+        quien = "" if pais == "AU" else " traído de 🇦🇺"
+        resultado = f"~{ars(c.au_con_aduana)} → ~{ars(abs(c.ahorro_con_aduana))} {sentido}{quien}"
+        con_valija = f"valija extra ({plata(valija, 'AUD')})" if valija else ""
+        if c.aduana_ars <= 0 and not valija:
             aduana = f"🛃 Aduana: no paga (vale menos de USD {FRANQUICIA_USD})"
+        elif c.aduana_ars <= 0:
+            aduana = f"🧳 Traído con {con_valija}, sin aduana (vale menos de USD {FRANQUICIA_USD}): {resultado}"
+        elif valija:
+            aduana = f"🛃 Traído con {con_valija} y aduana declarada ({regla}): {resultado}"
         else:
-            sentido = "más barato" if c.ahorro_con_aduana >= 0 else "más caro"
-            quien = "" if pais == "AU" else " traído de 🇦🇺"
-            aduana = (f"🛃 Si se declara en aduana ({regla}): ~{ars(c.au_con_aduana)} → "
-                      f"~{ars(abs(c.ahorro_con_aduana))} {sentido}{quien}")
+            aduana = f"🛃 Si se declara en aduana ({regla}): {resultado}"
         lineas.append(aduana)
         v = veredicto(c)
         extra = ""
