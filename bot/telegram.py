@@ -1,4 +1,4 @@
-"""Envío de mensajes y lectura de comandos (getUpdates) por Telegram.
+"""Envío de mensajes por Telegram (los comandos los responde el Worker, por webhook).
 Solo habla con los chat_id autorizados; a cualquier otro lo ignora."""
 from __future__ import annotations
 
@@ -58,24 +58,3 @@ class Telegram:
                 log.error("No pude enviar a Telegram: %s", e)
                 return False
         return True
-
-    def leer_comandos(self, offset: int | None) -> tuple[list[dict], int | None]:
-        """Devuelve ([{chat_id, texto}], nuevo_offset). Ignora chats no autorizados."""
-        if self.dry_run:
-            return [], offset
-        try:
-            updates = self._api("getUpdates", offset=offset, timeout=0,
-                                allowed_updates=["message"])
-        except Exception as e:  # noqa: BLE001
-            log.error("getUpdates falló: %s", e)
-            return [], offset
-        comandos = []
-        for u in updates:
-            offset = u["update_id"] + 1
-            msg = u.get("message") or {}
-            chat = str((msg.get("chat") or {}).get("id", ""))
-            if chat not in self.s.autorizados():
-                continue  # silencio total para desconocidos
-            if (txt := msg.get("text", "")).startswith("/"):
-                comandos.append({"chat_id": chat, "texto": txt.strip()})
-        return comandos, offset

@@ -1,0 +1,11 @@
+# Worker que responde /buscar, /estado, /filtros y /ayuda desde Telegram (plan gratis).
+# Los secretos NO van acá: wrangler secret put TELEGRAM_TOKEN / TELEGRAM_CHAT_ID_YO /
+# TELEGRAM_WEBHOOK_SECRET (ver README, "Búsquedas desde Telegram").
+name = "bot-ofertas"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+# el JSON que publica cada corrida en la rama "datos" (repo público: no hace falta token)
+DATOS_URL = "https://raw.githubusercontent.com/Willyjames1/bot-ofertas-pc/datos/precios.json"

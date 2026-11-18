@@ -44,6 +44,11 @@ lee OzBargain y me avisa **solo** de lo que pasa mis filtros de `config.yaml`.
 - **Resumen diario** a las 12:00 hora argentina (sección `resumen_diario` de `config.yaml`): un
   mensaje con el mejor precio de hoy en 🇦🇷 y 🇦🇺 de cada producto, pasado a pesos y con la diferencia
   entre países. Sale en la primera corrida desde esa hora; para verlo ya: `python -m bot resumen --dry-run`.
+- **Búsquedas desde Telegram, al instante**: `/buscar 5070 ti` (o escribir directo "5070 ti")
+  responde en segundos con los 5 más baratos de cada país, pasados a dólares y pesos, de hace cuánto
+  es cada precio, el link y la misma cuenta de los avisos (diferencia, valija, aduana y veredicto).
+  `/buscar ddr5 32gb au` (o `ar`) mira un solo país; `/buscar asus 5070 ti` filtra por marca. Si no
+  encuentra nada sugiere el modelo más parecido. Lo responde un Worker de Cloudflare (ver abajo).
 
 ## Cómo está armado
 
@@ -58,9 +63,13 @@ bot/
   comparar.py      producto equivalente del otro país, diferencia, aduana y veredicto
   resumen.py       resumen diario de las 12:00
   alertas.py       filtros, objetivos, mínimos, oportunidades, tope diario, silencio nocturno
-  telegram.py      envío y lectura de comandos (solo chat_id autorizados)
+  telegram.py      envío de mensajes (solo chat_id autorizados)
+  comandos.py      los textos de /estado y /filtros (los arma Python, los manda el Worker)
+  exportar.py      el JSON de precios actuales que lee el Worker (va a la rama datos)
   db.py            SQLite: el historial guarda solo los CAMBIOS de precio
   corrida.py       una corrida completa
+worker/            Worker de Cloudflare: /buscar, /estado, /filtros y /ayuda por webhook
+  src/normalizador_gen.js   las regexes de normalizar.py, generadas (python -m bot generar-worker)
 config.yaml        tus filtros (editable)
 perf.yaml          índice de rendimiento juegos 1440p / DaVinci (editable)
 ```
@@ -183,6 +192,7 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
 1. **BotFather**: en Telegram, hablale a @BotFather → `/newbot` → nombre y usuario → copiá el token.
 2. **Tu chat_id**: mandale cualquier mensaje a tu bot y abrí
    `https://api.telegram.org/bot<TOKEN>/getUpdates`; el número en `"chat":{"id": ...}` es tu chat_id.
+   (Con el webhook del Worker puesto, `getUpdates` no anda: sacalo antes con `python -m bot webhook --borrar`.)
 3. **GitHub**: repo público, subir este código, y en *Settings → Secrets and variables → Actions*
    cargar `TELEGRAM_TOKEN` y `TELEGRAM_CHAT_ID_YO`.
 4. **cron-job.org** (ya configurado; es lo que hace correr al bot puntual, y el `schedule` de GitHub
@@ -201,6 +211,35 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
    4. Cargalos sin que queden en ningún archivo del repo:
       `gh secret set EBAY_CLIENT_ID` y `gh secret set EBAY_CLIENT_SECRET` (te los pide por teclado),
       y en tu `.env` local para probar en la PC.
+6. **Cloudflare** (para `/buscar`; plan gratis):
+   1. Creá la cuenta en <https://dash.cloudflare.com/sign-up> y confirmá el mail. En
+      *Workers & Pages* elegí el subdominio de `workers.dev` (queda `bot-ofertas.<subdominio>.workers.dev`).
+   2. En una terminal, dentro de `worker/`: `npx wrangler login` (abre el navegador; autorizás vos).
+   3. El resto lo hace Claude: `npx wrangler deploy`, los secretos (`TELEGRAM_TOKEN`,
+      `TELEGRAM_CHAT_ID_YO` y `TELEGRAM_WEBHOOK_SECRET`, cargados con `wrangler secret put` desde el
+      `.env`, sin mostrarlos) y `python -m bot webhook --url https://…workers.dev/telegram`, que apunta
+      Telegram al Worker y registra el menú de comandos.
+
+## Búsquedas desde Telegram (Worker de Cloudflare)
+
+- **Cómo llegan los precios**: al final de cada corrida, `exportar.py` escribe `precios.json` y el
+  workflow lo sube a la rama `datos` junto con la base. Tiene solo lo que hay con stock visto en las
+  últimas 48 h (las 8 más baratas de cada modelo y país), las cotizaciones, las reglas de la cuenta,
+  los posts de OzBargain de las últimas 48 h y los textos de `/estado` y `/filtros`. Pesa unos 200 KB.
+- **El Worker** (`worker/src/index.js`) recibe cada mensaje por webhook, lee ese JSON de
+  `raw.githubusercontent.com` (repo público: sin token de GitHub), lo guarda en memoria un minuto y
+  responde. Parsear el JSON y buscar lleva 1 a 3 ms de CPU (el plan gratis da 10 ms por pedido).
+- **Mismo normalizador**: las regexes del Worker las genera Python a partir de `normalizar.py`
+  (`python -m bot generar-worker`), y `tests/test_worker.py` falla si quedaron desactualizadas o si
+  el Worker entiende un título distinto que Python. Lo mismo con las líneas de la cuenta
+  (`comparar.lineas_cuenta`).
+- **Seguridad**: solo responde a `TELEGRAM_CHAT_ID_YO` (a cualquier otro, silencio), rechaza con 401
+  todo pedido sin el `secret_token` del webhook, y el token de Telegram es un secreto de Cloudflare:
+  no está en el código ni se loguea.
+- **Con webhook, `getUpdates` no anda**: por eso los comandos ya no los lee la corrida de GitHub; las
+  alertas sí siguen saliendo de ahí, igual que antes.
+- Probarlo sin Telegram: `cd worker && node scripts/cli.mjs ../datos/precios.json "/buscar 5070 ti"`
+  (antes `python -m bot exportar` arma el JSON con la base local). Tests: `npm test` en `worker/`.
 
 ## Tiendas conectadas
 

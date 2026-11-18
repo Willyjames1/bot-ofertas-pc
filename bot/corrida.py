@@ -1,4 +1,7 @@
-"""Una corrida completa: comandos → cotización → tiendas (por turnos) → foros → alertas."""
+"""Una corrida completa: cotización → tiendas (por turnos) → foros → alertas → exportar.
+
+Los comandos de Telegram ya no se leen acá: los responde al instante el Worker de Cloudflare
+(worker/), que recibe los mensajes por webhook. Con webhook, getUpdates no anda."""
 from __future__ import annotations
 
 import json
@@ -6,8 +9,9 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from . import alertas, comandos, config, cotizaciones, feeds, resumen as resumen_diario
+from . import alertas, config, cotizaciones, exportar, feeds, resumen as resumen_diario
 from .alertas import Aviso, Motor
 from .db import DB
 from .fuentes import TIENDAS
@@ -100,14 +104,6 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
     alertas.NOMBRE_TIENDA.update(json.loads(db.get("nombres_tiendas", "{}")))
     alertas.NOMBRE_TIENDA.update({k: v.nombre for k, v in TIENDAS.items()})
     resumen: dict = {"black_friday": aj["black_friday"], "tiendas": {}, "posts": 0}
-
-    # 1) comandos pendientes
-    offset = db.get("tg_offset")
-    cmds, nuevo = tg.leer_comandos(int(offset) if offset else None)
-    for c in cmds:
-        tg.enviar(c["chat_id"], comandos.responder(c["texto"], cfg, db))
-    if nuevo is not None:
-        db.set("tg_offset", str(nuevo))
 
     # Saludo único: confirma que el token y el chat_id andan
     if not tg.dry_run and not db.get("saludo"):
@@ -220,5 +216,13 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
 
     resumen["alertas"] = alertas.despachar(avisos, tg, db, cfg, aj, sec)
     db.commit()
+
+    # 6) los precios actuales para /buscar (el Worker los lee de la rama datos)
+    try:
+        ruta = exportar.ruta_json() if db_ruta is None else Path(db_ruta).with_name("precios.json")
+        resumen["exportado_kb"] = round(exportar.guardar(
+            exportar.armar(db, cfg, cot, alertas.NOMBRE_TIENDA, datetime.now(timezone.utc)), ruta) / 1024)
+    except Exception as e:  # noqa: BLE001 — que no frene la corrida: las alertas ya salieron
+        log.warning("No pude exportar los precios para /buscar: %s", type(e).__name__)
     db.cerrar()
     return resumen

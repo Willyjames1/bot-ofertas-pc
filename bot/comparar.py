@@ -312,29 +312,37 @@ def lineas_comparacion(db: DB, cot: Cotizacion | None, pais: str, categoria: str
                           f"≈ {usd(u)} ≈ {ars(cot.usd_a_ars(u))} ({escape(eq.nota)}{staticice})")
             c = cuenta(cot, f["precio"], precio, valija)
     if c is not None:
-        if c.diferencia >= 0:
-            lineas.append(f"💰 Diferencia: ~{ars(c.diferencia)} más barato en 🇦🇺 ({c.diferencia_pct:.0f}%)")
-        else:
-            lineas.append(f"💰 Diferencia: ~{ars(-c.diferencia)} más barato en 🇦🇷 ({-c.diferencia_pct:.0f}%)")
-        regla = f"{ARANCEL * 100:.0f}% sobre lo que pase de USD {FRANQUICIA_USD}"
-        sentido = "más barato" if c.ahorro_con_aduana >= 0 else "más caro"
-        quien = "" if pais == "AU" else " traído de 🇦🇺"
-        resultado = f"~{ars(c.au_con_aduana)} → ~{ars(abs(c.ahorro_con_aduana))} {sentido}{quien}"
-        con_valija = f"valija extra ({plata(valija, 'AUD')})" if valija else ""
-        if c.aduana_ars <= 0 and not valija:
-            aduana = f"🛃 Aduana: no paga (vale menos de USD {FRANQUICIA_USD})"
-        elif c.aduana_ars <= 0:
-            aduana = f"🧳 Traído con {con_valija}, sin aduana (vale menos de USD {FRANQUICIA_USD}): {resultado}"
-        elif valija:
-            aduana = f"🛃 Traído con {con_valija} y aduana declarada ({regla}): {resultado}"
-        else:
-            aduana = f"🛃 Si se declara en aduana ({regla}): {resultado}"
-        lineas.append(aduana)
-        v = veredicto(c)
-        extra = ""
-        if pais == "AR":
-            extra = {"conviene": " traerlo de 🇦🇺", "casi igual": "", "no conviene": " traerlo: comprá en 🇦🇷"}[v]
-        lineas.append(f"{ICONO_VEREDICTO[v]} Veredicto: {v}{extra}")
+        lineas += lineas_cuenta(c, pais, valija)
     if nota := cot.nota_respaldo():
         lineas.append(nota)
+    return lineas
+
+
+def lineas_cuenta(c: Cuenta, pais: str, valija: float) -> list[str]:
+    """Diferencia, traerlo (valija + aduana) y veredicto. El Worker de /buscar arma exactamente
+    estas mismas líneas (worker/src/comparar.js; tests/test_worker.py compara las dos)."""
+    lineas = []
+    if c.diferencia >= 0:
+        lineas.append(f"💰 Diferencia: ~{ars(c.diferencia)} más barato en 🇦🇺 ({c.diferencia_pct:.0f}%)")
+    else:
+        lineas.append(f"💰 Diferencia: ~{ars(-c.diferencia)} más barato en 🇦🇷 ({-c.diferencia_pct:.0f}%)")
+    regla = f"{ARANCEL * 100:.0f}% sobre lo que pase de USD {FRANQUICIA_USD}"
+    sentido = "más barato" if c.ahorro_con_aduana >= 0 else "más caro"
+    quien = "" if pais == "AU" else " traído de 🇦🇺"
+    resultado = f"~{ars(c.au_con_aduana)} → ~{ars(abs(c.ahorro_con_aduana))} {sentido}{quien}"
+    con_valija = f"valija extra ({plata(valija, 'AUD')})" if valija else ""
+    if c.aduana_ars <= 0 and not valija:
+        aduana = f"🛃 Aduana: no paga (vale menos de USD {FRANQUICIA_USD})"
+    elif c.aduana_ars <= 0:
+        aduana = f"🧳 Traído con {con_valija}, sin aduana (vale menos de USD {FRANQUICIA_USD}): {resultado}"
+    elif valija:
+        aduana = f"🛃 Traído con {con_valija} y aduana declarada ({regla}): {resultado}"
+    else:
+        aduana = f"🛃 Si se declara en aduana ({regla}): {resultado}"
+    lineas.append(aduana)
+    v = veredicto(c)
+    extra = ""
+    if pais == "AR":
+        extra = {"conviene": " traerlo de 🇦🇺", "casi igual": "", "no conviene": " traerlo: comprá en 🇦🇷"}[v]
+    lineas.append(f"{ICONO_VEREDICTO[v]} Veredicto: {v}{extra}")
     return lineas

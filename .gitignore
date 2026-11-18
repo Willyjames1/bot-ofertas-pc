@@ -7,3 +7,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 web/salida/
+worker/node_modules/
+worker/.wrangler/
+worker/.dev.vars

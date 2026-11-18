@@ -66,10 +66,15 @@ jobs:
         if: always()
         run: |
           test -f datos/precios.db || exit 0
-          # Commit "huérfano" con solo precios.db, armado sin tocar la rama main,
-          # y empujado con las credenciales que ya dejó actions/checkout.
+          # Commit "huérfano" con precios.db y precios.json (lo que lee el Worker de /buscar),
+          # armado sin tocar la rama main y empujado con las credenciales que ya dejó actions/checkout.
           BLOB=$(git hash-object -w datos/precios.db)
-          TREE=$(printf '100644 blob %s\tprecios.db\n' "$BLOB" | git mktree)
+          ARBOL=$(printf '100644 blob %s\tprecios.db\n' "$BLOB")
+          if [ -f datos/precios.json ]; then
+            JSON=$(git hash-object -w datos/precios.json)
+            ARBOL="$ARBOL"$'\n'$(printf '100644 blob %s\tprecios.json' "$JSON")
+          fi
+          TREE=$(printf '%s\n' "$ARBOL" | git mktree)
           COMMIT=$(git -c user.name="bot-ofertas" -c user.email="bot-ofertas@users.noreply.github.com" \
                    commit-tree "$TREE" -m "datos $(date -u +%FT%TZ)")
           git push -q -f origin "$COMMIT:refs/heads/datos"
