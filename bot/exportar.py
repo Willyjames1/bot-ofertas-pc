@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -37,7 +38,7 @@ CATEGORIAS = ("placas", "cpu", "ram", "ssd", "pcs")
 # lo que el Worker necesita de cada modelo para saber si coincide con la búsqueda
 CAMPOS = {"placas": ("chip", "vram"), "cpu": ("marca", "nucleos"),
           "ram": ("capacidad_gb", "modulos", "velocidad", "cl"),
-          "ssd": ("capacidad_tb", "interfaz", "gen"), "pcs": ("chip", "ram_gb", "ssd_tb", "cpu", "nucleos")}
+          "ssd": ("capacidad_tb", "interfaz", "gen", "formato"), "pcs": ("chip", "ram_gb", "ssd_tb", "cpu", "nucleos")}
 TIPOS_PRECIO = ("transferencia", "contado")
 
 
@@ -45,14 +46,42 @@ def ruta_json() -> Path:
     return RAIZ / os.getenv("BOT_JSON", "datos/precios.json")
 
 
+# lo que el renglón de /buscar ya dice aparte (Gen, velocidad) o que no ayuda a reconocerlo
+RE_RUIDO_SSD = re.compile(
+    r"(?<![\w.])(?:DISCO|S[OÓ]LIDO|INTERNO|INTERNAL|SSD|SOLID STATE DRIVE|M\.2|2280|NVME(?:\s*V?1\.\d)?|"
+    r"PCI-?E\s*(?:GEN\s*)?\d?(?:\.0)?(?:\s*X\s*4)?|GEN\s*\d(?:\s*X\s*4)?|X\s*4|3D\s*(?:TLC\s*)?NAND|TLC|"
+    r"[\d.,]+\s*MB/?S|[345]\.0|READ|WRITE|HEAT\s*SINK|DISIPADOR(?:\s*T[EÉ]RMICO)?|WITH|CON|SIN|DRIVE|BULK|[-,])"
+    r"(?![\w.])", re.I)
+# códigos de pieza: CT2000E100SSD8, TM8FFD002T0C101, MZ-V9V2T0BW, SNV3S/2000G
+RE_CODIGO_SSD = re.compile(r"(?<!\S)(?=\S*\d)(?=\S*[A-Za-z])\S{9,}(?!\S)")
+
+
+def titulo_corto_ssd(titulo: str) -> str:
+    """El nombre de un SSD que no está en ssd_modelos.yaml: el título sin "Disco Sólido SSD M.2 NVMe PCIe
+    4.0", sin códigos de pieza ni lo que va entre paréntesis ("Team 2TB MP44Q", "PNY CS2241 2TB")."""
+    t = re.sub(r"\([^)]*\)", " ", " ".join(titulo.split()))
+    for _ in range(2):                    # "M.2 2280 NVMe PCIe 4.0": las pegadas salen en la segunda vuelta
+        t = RE_RUIDO_SSD.sub(" ", t)
+    t = " ".join(RE_CODIGO_SSD.sub(" ", t).split())
+    return t if len(t) <= 40 else t[:39].rstrip() + "…"
+
+
 def _detalle(cat: str, r, d: dict) -> str:
     """Lo que va al lado de la tienda: la marca y línea, o el procesador/RAM/disco de una PC."""
+    if cat == "ssd":
+        return d.get("linea") or titulo_corto_ssd(r["titulo"] or "")
     if cat == "pcs":
         partes = [d.get("cpu"), f"{d['ram_gb']}GB RAM" if d.get("ram_gb") else None,
                   f"{d['ssd_tb']:g}TB SSD" if d.get("ssd_tb") else None]
         partes = [p for p in partes if p]
         return " · ".join(partes) if partes else (r["titulo"] or "")[:60]
     return r["variante"] or ""
+
+
+def _ssd_del_post(titulo: str) -> dict | None:
+    """Si el post es de un SSD, lo que hace falta para /buscar (así el Worker no lo parsea en cada pedido)."""
+    d = N.datos_ssd(N.limpiar(titulo))
+    return None if isinstance(d, str) else {k: d[k] for k in ("capacidad_tb", "interfaz", "gen", "formato", "linea")}
 
 
 def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datetime | None = None) -> dict:
@@ -69,14 +98,23 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
         for cat in CATEGORIAS:
             vistos: Counter = Counter()
             for r in db.vigentes(pais, cat, desde, ahora):   # sin las que no tienen stock; confirmadas primero
-                if not r["precio"] or vistos[r["modelo"]] >= POR_MODELO:
+                modelo, d = r["modelo"], json.loads(r["datos"] or "{}")
+                if cat == "ssd":
+                    # de nuevo desde el título: así vale ya la tabla de ssd_modelos.yaml (y lo que se
+                    # leyó antes de un cambio en el normalizador), sin esperar a que se vuelva a leer la tienda
+                    d = N.datos_ssd(N.limpiar(r["titulo"] or ""))
+                    if isinstance(d, str):
+                        continue
+                    modelo = N.nombre_ssd(d)
+                # los SSD, POR_MODELO de cada uno (990 Pro, NV3…): "SSD NVMe Gen4 2TB" junta decenas
+                cupo = (modelo, d.get("linea") or r["titulo"]) if cat == "ssd" else modelo
+                if not r["precio"] or vistos[cupo] >= POR_MODELO:
                     continue
-                vistos[r["modelo"]] += 1
-                d = json.loads(r["datos"] or "{}")
-                clave = (cat, r["modelo"])
+                vistos[cupo] += 1
+                clave = (cat, modelo)
                 if clave not in i_modelo:
                     i_modelo[clave] = len(modelos)
-                    modelos.append([r["modelo"], cat, {k: d[k] for k in CAMPOS[cat] if d.get(k) is not None}])
+                    modelos.append([modelo, cat, {k: d[k] for k in CAMPOS[cat] if d.get(k) is not None}])
                 if r["tienda"] not in i_tienda:
                     i_tienda[r["tienda"]] = len(tiendas)
                     tiendas.append(nombres.get(r["tienda"], r["tienda"]))
@@ -93,11 +131,13 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
                     1 if d.get("via") == "staticICE" else 0,                # vino de staticICE
                     i_motivo[motivo],                                       # 0 = stock confirmado
                     clave_url(r["url"]),       # para el botón ❌ (así el Worker no calcula sha1 en cada pedido)
+                    *([[d.get("linea"), d.get("lectura"), d.get("escritura")]] if cat == "ssd" else []),
                 ])
     limite = (ahora - timedelta(hours=HORAS_POSTS)).isoformat(timespec="seconds")
     posts = [[p["titulo"], p["url"], p["votos"], p["precio"],
               max(0, int((ahora - datetime.fromisoformat(p["publicado"])).total_seconds() // 60)),
-              N.limpiar(p["titulo"])]           # ya limpio: el Worker no lo hace en cada pedido
+              N.limpiar(p["titulo"]),           # ya limpio: el Worker no lo hace en cada pedido
+              _ssd_del_post(p["titulo"])]
              for p in db.c.execute("SELECT * FROM posts WHERE fuente='ozbargain' AND publicado>=? "
                                    "ORDER BY publicado DESC LIMIT ?", (limite, MAX_POSTS))]
     return {
@@ -109,13 +149,14 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
         "tiendas": tiendas,
         "modelos": modelos,
         # [modelo, país, precio, tienda, link, detalle, hace_min, tipo_precio, staticICE, motivo, clave]
+        # (+ los SSD: [modelo de ssd_modelos.yaml, lectura, escritura])
         "p": filas,
         "motivos": motivos,
         # los "❌ Sin stock" que ya incorporó la base (clave = sha1(link)[:16] → cuándo lo tocaste). El
         # Worker oculta lo que tocaste DESPUÉS (todavía no está acá); lo de acá ya lo resuelve la base:
         # fuera del JSON mientras siga sin stock, de vuelta cuando la tienda lo tiene otra vez
         "ocultos": {o["h"]: o["ts"] for o in db.c.execute("SELECT h, ts FROM ocultos")},
-        # [título, link, votos, precio A$, hace_min, título limpio]
+        # [título, link, votos, precio A$, hace_min, título limpio, SSD (o null)]
         "posts": posts,
         "estado": comandos.estado_texto(db),
         "filtros": comandos.filtros_texto(cfg),
@@ -165,8 +206,10 @@ def guardar(datos: dict, ruta: Path) -> int:
 REGEXES = ("USADO", "NOTEBOOK", "PC_ARMADA", "TRAY", "RE_NVIDIA", "RE_NVIDIA_PEGADO", "RE_AMD", "RE_VRAM",
            "RE_RYZEN", "RE_RYZEN_SUELTO", "RE_ULTRA", "RE_ULTRA_LEJOS", "RE_ULTRA_PLUS", "RE_I14",
            "RE_CORSAIR", "RE_GSKILL", "RE_KINGSTON", "RE_KIT", "RE_KIT_INV", "RE_GB", "RE_VEL", "RE_VEL_DDR", "RE_VEL_SUELTA", "RE_CL",
-           "SSD_NO", "SSD_SI", "RE_SSD_TB", "RE_SSD_GB", "RE_SSD_GEN")
-TABLAS = ("VRAM_VALIDAS", "VRAM_POR_DEFECTO", "LINEAS_SSD")
+           "SSD_NO", "SSD_EXTERNO", "SSD_CARRY", "SSD_SI", "RE_SSD_TB", "RE_SSD_GB", "RE_SSD_GEN", "RE_SSD_FORMA",
+           "RE_SSD_VEL_PAR", "RE_SSD_VEL_RW", "RE_SSD_VEL", "RE_PIDE_VEL")
+TABLAS = ("VRAM_VALIDAS", "VRAM_POR_DEFECTO", "SSD_MODELOS", "SSD_ALIAS", "MAX_PALABRAS_ALIAS", "MARCAS_SSD",
+          "GB_A_TB")
 
 
 def regex_js() -> str:

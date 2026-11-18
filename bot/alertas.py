@@ -17,7 +17,7 @@ from .cotizaciones import Cotizacion, ars
 from .db import DB
 from .feeds import codigo_descuento, es_codigo_ebay, precio_con_codigo, vigente
 from .modelos import Oferta, Post
-from .normalizar import canon, parsear_chip_config
+from .normalizar import canon, parsear_chip_config, ssd_estandar
 from .telegram import Telegram
 
 log = logging.getLogger("bot.alertas")
@@ -133,9 +133,13 @@ def pasa_filtros(cfg: dict, categoria: str, modelo: str | None, datos: dict, pre
         if (lista := c.get("modelos")) and canon(modelo) not in {canon(x) for x in lista}:
             return False
     elif categoria == "ssd":
+        # solo M.2 2280 NVMe Gen4/Gen5 con la generación conocida (ni SATA, ni externos, ni carry, ni
+        # Gen3, ni los 2230/2242 de notebook): lo mismo que muestra /buscar si no pedís otra cosa
+        if not ssd_estandar(datos):
+            return False
         if (caps := c.get("capacidad_tb")) and datos.get("capacidad_tb") not in caps:
             return False
-        if (gmin := c.get("gen_min")) and (datos.get("interfaz") == "SATA" or (datos.get("gen") or gmin) < gmin):
+        if (gmin := c.get("gen_min")) and datos["gen"] < gmin:
             return False
     elif categoria == "ram":
         if (caps := c.get("capacidad_gb")) and datos.get("capacidad_gb") not in caps:

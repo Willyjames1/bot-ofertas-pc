@@ -1,0 +1,133 @@
+# SSD conocidos: generación PCIe y velocidades de fábrica (lectura/escritura secuencial, MB/s).
+#
+# Los usan /buscar, los avisos y el resumen cuando el título no dice la generación o la velocidad
+# (si el título trae "7450/6900 MB/s", manda el título; la generación de la tabla manda siempre:
+# hay tiendas que ponen "Gen5" a un 990 Evo Plus porque anda en 5.0 x2).
+#
+#   nombre     cómo se muestra ("Samsung 990 Pro 2TB · Gen4 · …")
+#   marca      la misma que detecta el normalizador (si el título es de otra marca no se usa:
+#              "XPG Mars 980 Pro" no es un Samsung 980 Pro)
+#   alias      cómo aparece en los títulos, sin la marca. Da igual mayúsculas y espacios
+#              ("990PRO", "990 pro"); tiene que ser la palabra entera ("MP44" no agarra "MP44L")
+#   gen        4 o 5 (3 = PCIe 3.0, 0 = SATA)
+#   velocidad  por capacidad en TB: [lectura, escritura]. Sin "velocidad", o sin esa capacidad,
+#              sale "vel. s/d" (salvo que el título la diga)
+#
+# Después de tocarlo: python -m bot generar-worker (el Worker usa la misma tabla) y subirlo.
+
+# ---------------------------------------------------------------- Gen5
+- nombre: Samsung 9100 Pro
+  marca: Samsung
+  alias: [9100 PRO]
+  gen: 5
+  velocidad: {1: [14700, 13300], 2: [14700, 13400], 4: [14800, 13400], 8: [14800, 13400]}
+- nombre: WD SN8100
+  marca: WD
+  alias: [SN8100]
+  gen: 5
+  velocidad: {1: [14900, 11000], 2: [14900, 14000], 4: [14900, 14000], 8: [14900, 14000]}
+- nombre: Crucial T705
+  marca: Crucial
+  alias: [T705]
+  gen: 5
+  velocidad: {1: [13600, 10200], 2: [14500, 12700], 4: [14100, 12600]}
+- nombre: Crucial T700
+  marca: Crucial
+  alias: [T700]
+  gen: 5
+  velocidad: {1: [11700, 9500], 2: [12400, 11800], 4: [12400, 11800]}
+- nombre: Corsair MP700 Pro
+  marca: Corsair
+  alias: [MP700 PRO]
+  gen: 5
+  velocidad: {1: [11700, 9600], 2: [12400, 11800], 4: [12400, 11800]}
+
+# ---------------------------------------------------------------- Gen4
+- nombre: Samsung 990 Pro
+  marca: Samsung
+  alias: [990 PRO]
+  gen: 4
+  velocidad: {1: [7450, 6900], 2: [7450, 6900], 4: [7450, 6900]}
+- nombre: Samsung 990 Evo Plus
+  marca: Samsung
+  alias: [990 EVO PLUS]
+  gen: 4
+  velocidad: {1: [7150, 6300], 2: [7250, 6300], 4: [7250, 6300]}
+- nombre: WD SN850X
+  marca: WD
+  alias: [SN850X]
+  gen: 4
+  velocidad: {1: [7300, 6300], 2: [7300, 6600], 4: [7300, 6600], 8: [7200, 6600]}
+- nombre: WD SN7100
+  marca: WD
+  alias: [SN7100]
+  gen: 4
+  velocidad: {0.5: [6800, 5800], 1: [7250, 6900], 2: [7250, 6900], 4: [7000, 6700]}
+- nombre: Crucial T500
+  marca: Crucial
+  alias: [T500]
+  gen: 4
+  velocidad: {0.5: [7200, 5700], 1: [7300, 6800], 2: [7400, 7000], 4: [7400, 7000]}
+- nombre: Corsair MP600 Pro
+  marca: Corsair
+  alias: [MP600 PRO LPX, MP600 PRO XT, MP600 PRO]
+  gen: 4
+  velocidad: {1: [7100, 5800], 2: [7100, 6800], 4: [7100, 6800]}
+- nombre: Kingston KC3000
+  marca: Kingston
+  alias: [KC3000]
+  gen: 4
+  velocidad: {0.5: [7000, 3900], 1: [7000, 6000], 2: [7000, 7000], 4: [7000, 7000]}
+- nombre: Kingston NV3
+  marca: Kingston
+  alias: [NV3]
+  gen: 4
+  velocidad: {0.5: [5000, 3000], 1: [6000, 4000], 2: [6000, 5000], 4: [6000, 5000]}
+- nombre: Kingston Fury Renegade
+  marca: Kingston
+  alias: [FURY RENEGADE, RENEGADE]
+  gen: 4
+  velocidad: {0.5: [7300, 3900], 1: [7300, 6000], 2: [7300, 7000], 4: [7300, 7000]}
+- nombre: Lexar NM790
+  marca: Lexar
+  alias: [NM790]
+  gen: 4
+  velocidad: {0.5: [7200, 4400], 1: [7400, 6500], 2: [7400, 6500], 4: [7400, 6500]}
+- nombre: Seagate FireCuda 530
+  marca: Seagate
+  alias: [FIRECUDA 530]
+  gen: 4
+  velocidad: {0.5: [7000, 3000], 1: [7300, 6000], 2: [7300, 6900], 4: [7300, 6900]}
+- nombre: Solidigm P44 Pro
+  marca: Solidigm
+  alias: [P44 PRO]
+  gen: 4
+  velocidad: {1: [7000, 6500], 2: [7000, 6500]}
+- nombre: Team MP44
+  marca: TeamGroup
+  alias: [MP44]
+  gen: 4
+  velocidad: {1: [7400, 6500], 2: [7400, 6900], 4: [7400, 6900]}
+
+# ---------------------------------------------------------------- solo la generación (sin velocidades)
+- {nombre: Kingston Fury Renegade G5, marca: Kingston, alias: [FURY RENEGADE G5, RENEGADE G5], gen: 5}
+- {nombre: Crucial T710, marca: Crucial, alias: [T710], gen: 5}
+- {nombre: Crucial P510, marca: Crucial, alias: [P510], gen: 5}
+- {nombre: Corsair MP700, marca: Corsair, alias: [MP700], gen: 5}
+- {nombre: Seagate FireCuda 540, marca: Seagate, alias: [FIRECUDA 540], gen: 5}
+- {nombre: Samsung 990 Evo, marca: Samsung, alias: [990 EVO], gen: 4}
+- {nombre: Samsung 980 Pro, marca: Samsung, alias: [980 PRO], gen: 4}
+- {nombre: WD SN770, marca: WD, alias: [SN770], gen: 4}
+- {nombre: WD SN5000, marca: WD, alias: [SN5000], gen: 4}
+- {nombre: WD SN580, marca: WD, alias: [SN580], gen: 4}
+- {nombre: Crucial P310, marca: Crucial, alias: [P310], gen: 4}
+- {nombre: Crucial P3 Plus, marca: Crucial, alias: [P3 PLUS], gen: 4}
+- {nombre: Crucial P5 Plus, marca: Crucial, alias: [P5 PLUS], gen: 4}
+- {nombre: Kingston NV2, marca: Kingston, alias: [NV2], gen: 4}
+- {nombre: Corsair MP600, marca: Corsair, alias: [MP600], gen: 4}
+- {nombre: ADATA Legend 960, marca: ADATA, alias: [LEGEND 960], gen: 4}
+- {nombre: ADATA Legend 900 Pro, marca: ADATA, alias: [LEGEND 900 PRO], gen: 4}
+- {nombre: ADATA Legend 900, marca: ADATA, alias: [LEGEND 900], gen: 4}
+- {nombre: ADATA SX8200, marca: ADATA, alias: [SX8200], gen: 3}
+- {nombre: Samsung 870 Evo, marca: Samsung, alias: [870 EVO], gen: 0}
+- {nombre: Crucial MX500, marca: Crucial, alias: [MX500], gen: 0}

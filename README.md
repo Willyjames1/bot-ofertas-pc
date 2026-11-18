@@ -51,7 +51,8 @@ lee OzBargain y me avisa **solo** de lo que pasa mis filtros de `config.yaml`.
   `r` y un número, en cualquier parte, elige cuántos por país (`/buscar 5070 ti r10`,
   `/buscar r16 ddr5 32gb au`): hasta 16; si pedís más, muestra 16 y lo avisa. `r7 9800x3d` sigue
   siendo un Ryzen. Si la respuesta pasa el límite de Telegram, llega en varios mensajes, sin
-  cortar ningún producto. Si no encuentra nada sugiere el modelo más parecido. Lo responde un Worker de Cloudflare (ver abajo).
+  cortar ningún producto. Si no encuentra nada sugiere el modelo más parecido. Los SSD van
+  uno por renglón con la velocidad (`/buscar ssd gen5 2tb`, `/buscar 990 pro 2tb`; ver «SSD» abajo). Lo responde un Worker de Cloudflare (ver abajo).
 
 ## Cómo está armado
 
@@ -243,6 +244,27 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
   alertas sí siguen saliendo de ahí, igual que antes.
 - Probarlo sin Telegram: `cd worker && node scripts/cli.mjs ../datos/precios.json "/buscar 5070 ti"`
   (antes `python -m bot exportar` arma el JSON con la base local). Tests: `npm test` en `worker/`.
+
+## SSD (`ssd_modelos.yaml`)
+
+En `/buscar`, en los avisos y en el resumen, un SSD es **M.2 2280 NVMe Gen4 o Gen5**: no salen los
+SATA (2.5" y M.2), los externos o portátiles, los carry/enclosures, los Gen3, los de notebook
+(2230/2242) ni los que no se sabe si son Gen4 o Gen5. En `/buscar` aparecen solo si los pedís:
+`sata`, `externo`, `carry`, `gen3`, `2230`, `2242`.
+
+Cada producto va en un renglón: `Samsung 990 Pro 2TB · Gen4 · 7.450/6.900 MB/s · Mwave A$249 ≈ $267.000`
+(lectura/escritura secuencial; `vel. s/d` si no se sabe). La velocidad sale del título y, si no la
+dice, de `ssd_modelos.yaml`: los modelos conocidos con su generación y velocidades de fábrica por
+capacidad. La generación de la tabla manda sobre la del título (hay tiendas que ponen "Gen5" a un
+990 Evo Plus porque anda en 5.0 x2). Para agregar un modelo: una entrada nueva en el YAML,
+`python -m bot generar-worker` (el Worker usa la misma tabla) y subirlo.
+
+- Por modelo: `/buscar 990 pro`, `/buscar samsung 990 pro`, `/buscar sn850x 4tb`, `/buscar mp700 pro`,
+  `/buscar t705` ("990pro", "990 PRO" y "Samsung 990 Pro NVMe" son lo mismo).
+- Por generación y capacidad: `/buscar ssd gen5 2tb au r10`, `/buscar ssd gen4 4tb`. Se combinan con
+  país, marca y `r`.
+- `vel` ordena por velocidad de lectura, de mayor a menor (`/buscar ssd gen4 2tb vel`); sin `vel`, por precio.
+- En `resumen_diario.productos` se pueden poner SSD igual: `ssd: [990 Pro 2TB, Gen5 2TB]`.
 
 ## Stock (`bot/stock.py`)
 

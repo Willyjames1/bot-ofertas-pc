@@ -103,14 +103,15 @@ def test_maximus_precio_contado_lista_y_stock():
 
 def test_ssd():
     o = oferta("Samsung 990 PRO 2TB PCIe 4.0 NVMe M.2 SSD", 199, pais="AU", tienda="umart", cat="ssd")
-    assert o.modelo == "SSD NVMe Gen4 2TB" and o.variante == "Samsung 990 PRO"
+    assert o.modelo == "SSD NVMe Gen4 2TB" and o.variante == "Samsung 990 Pro"
     assert pasa_filtros(CFG, "ssd", o.modelo, o.datos, 199, "AUD")
     assert oferta("WD_BLACK SN8100 4TB", 500, pais="AU", cat="ssd").modelo == "SSD NVMe Gen5 4TB"
     sata = oferta("Crucial MX500 2TB SATA SSD", 150, pais="AU", cat="ssd")
     assert sata.modelo == "SSD SATA 2TB" and not pasa_filtros(CFG, "ssd", sata.modelo, sata.datos, 150, "AUD")
     chico = oferta("Kingston NV3 1TB NVMe", 90, pais="AU", cat="ssd")
     assert not pasa_filtros(CFG, "ssd", chico.modelo, chico.datos, 90, "AUD")    # pide 2 o 4 TB
-    assert oferta("Samsung T7 Portable SSD 2TB USB 3.2", 200, pais="AU", cat="ssd").descartada
+    externo = oferta("Samsung T7 Portable SSD 2TB USB 3.2", 200, pais="AU", cat="ssd")
+    assert externo.modelo == "SSD externo 2TB" and not pasa_filtros(CFG, "ssd", externo.modelo, externo.datos, 200, "AUD")
     assert [m.modelo for m in modelos_del_post(post("Samsung 990 Pro 2TB $199 @ Amazon AU"))] == ["SSD NVMe Gen4 2TB"]
 
 

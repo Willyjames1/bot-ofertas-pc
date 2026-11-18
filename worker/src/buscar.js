@@ -3,7 +3,7 @@
 import * as N from "./normalizador.js";
 import { VRAM_POR_DEFECTO } from "./normalizador_gen.js";
 import { cuenta, lineasCuenta } from "./comparar.js";
-import { ars, escapar, hace, horaArgentina, plata, usd } from "./formato.js";
+import { ars, escapar, hace, horaArgentina, miles, plata, usd } from "./formato.js";
 import { claveUrl } from "./sha1.js";
 
 export const MOSTRAR = 5;       // por país, si no pedís otra cantidad con r<N>
@@ -17,18 +17,24 @@ const NO_FILTRA = new Set(["RTX", "RX", "GTX", "TI", "SUPER", "XT", "XTX", "GRE"
   "MEMORIA", "MEMORIAS", "SSD", "NVME", "M.2", "M2", "SATA", "PCIE", "GEN", "PC", "PCS", "DE", "LA", "EL", "Y", "CON",
   "EN", "PARA", "KIT", "DUAL", "X", "RYZEN", "CORE", "ULTRA", "INTEL", "AMD", "NVIDIA", "PLACA", "PLACAS", "VIDEO",
   "GPU", "CPU", "PROCESADOR", "MICRO", "MICROPROCESADOR", "DESKTOP", "COMPUTADORA", "ARMADA", "GAMER", "GAMING",
-  "PREBUILT", "MHZ", "BOX", "TRAY", "DISCO", "SOLIDO", "PLUS", "OMEN", "VICTUS"]);
+  "PREBUILT", "MHZ", "BOX", "TRAY", "DISCO", "SOLIDO", "PLUS", "OMEN", "VICTUS",
+  // SSD: lo entiende consultaSsd (velocidad, externos, carry)
+  "VEL", "VELOCIDAD", "RAPIDO", "RAPIDOS", "FAST", "FASTEST", "EXTERNO", "EXTERNA", "EXTERNOS", "EXTERNAS",
+  "EXTERNAL", "PORTABLE", "PORTATIL", "USB", "CARRY", "ENCLOSURE", "CADDY", "GABINETE", "DOCK", "ADAPTADOR",
+  "ADAPTER", "INTERNO", "SOLID", "STATE", "DRIVE", "DISCOS"]);
 
 /** Arma los índices una vez por cada JSON (el Worker lo guarda en memoria entre pedidos). */
 export function preparar(d) {
   const modelos = d.modelos.map(([nombre, cat, datos], i) => ({
     i, nombre, cat, datos, clave: N.limpiar(nombre), filas: { AR: [], AU: [] },
   }));
-  for (const [mi, pais, precio, ti, url, detalle, haceMin, tipo, staticice, iMotivo, h] of d.p) {
+  for (const [mi, pais, precio, ti, url, detalle, haceMin, tipo, staticice, iMotivo, h, s] of d.p) {
     const m = modelos[mi];
     // motivo vacío = stock confirmado (JSON viejo, sin motivos: lo de staticICE queda sin confirmar)
     const motivo = iMotivo == null ? (staticice ? "staticICE no informa stock" : "") : (d.motivos?.[iMotivo] ?? "");
-    m.filas[pais].push({ m, pais, precio, tienda: d.tiendas[ti], url, detalle, haceMin, tipo, ok: !motivo, motivo, busca: null, h: h ?? null });
+    m.filas[pais].push({ m, pais, precio, tienda: d.tiendas[ti], url, detalle, haceMin, tipo, ok: !motivo, motivo, busca: null, h: h ?? null,
+      // SSD: el modelo de ssd_modelos.yaml y las velocidades (MB/s) de esta publicación
+      linea: s?.[0] ?? null, lectura: s?.[1] ?? null, escritura: s?.[2] ?? null });
   }
   // los chips de TODAS las categorías (los archivos por categoría los traen en "chips")
   const chips = new Set([...Object.keys(VRAM_POR_DEFECTO), ...(d.chips || [])]);
@@ -92,10 +98,13 @@ export function interpretar(texto, chips) {
     Object.assign(q, { cat: "cpu", f: { modelo: proc.modelo } });
   } else if (/(?<![A-Z0-9])(DDR5|RAM|MEMORIAS?)(?![A-Z0-9])/.test(t) && N.ram(t.includes("DDR5") ? t : `${t} DDR5`)) {
     Object.assign(q, { cat: "ram", f: N.ram(t.includes("DDR5") ? t : `${t} DDR5`) });
-  } else if (N.ssd(t) || (/\d\s*TB\b/.test(t) && N.ssd(t, false))) {
-    const s = N.ssd(t) || N.ssd(t, false);
-    Object.assign(q, { cat: "ssd", f: { ...s, sata: t.includes("SATA"), nvme: t.includes("NVME") } });
-    if (s.linea) q.extra = q.extra.concat(s.linea.split(" ").filter((w) => !/\d/.test(w) && !NO_FILTRA.has(w)));
+  } else {
+    // "ssd gen5 2tb", "990 pro 2tb", "sn850x", "ssd sata 1tb", "ssd externo": sin pedirlo, solo M.2 NVMe Gen4/Gen5
+    const s = N.consultaSsd(t);
+    if (s) {
+      Object.assign(q, { cat: "ssd", f: s });
+      q.extra = q.extra.filter((w) => !s.palabras.includes(w));   // "990 PRO": el PRO ya es del modelo
+    }
   }
   return q;
 }
@@ -110,9 +119,7 @@ function coincide(q, m) {
     case "ram":
       return d.capacidad_gb === f.capacidad_gb && (!f.dijo.modulos || d.modulos === f.modulos) &&
         (!f.dijo.velocidad || d.velocidad === f.velocidad) && (!f.dijo.cl || d.cl === f.cl);
-    case "ssd":
-      return d.capacidad_tb === f.capacidad_tb && (!f.dijo.gen || d.gen === f.gen) &&
-        (!f.sata || d.interfaz === "SATA") && (!f.nvme || d.interfaz === "NVMe");
+    case "ssd": return N.coincideSsd(f, d, false);    // el modelo (990 Pro…) se mira en cada publicación
     default: return false;
   }
 }
@@ -133,8 +140,10 @@ export function filas(datos, q, extra = q.extra) {
   const filtros = palabras.map(regexPalabra);
   for (const m of datos.modelos) {
     if (q.cat && !coincide(q, m)) continue;
+    const linea = q.cat === "ssd" ? q.f.linea : null;
     for (const p of PAISES) {
       for (const f of m.filas[p]) {
+        if (linea && f.linea !== linea) continue;
         // el texto para las marcas y el texto libre se arma solo cuando hace falta (limpiar
         // las ~2.000 filas de entrada se comía buena parte de los 10 ms de CPU del plan gratis)
         if (filtros.length) {
@@ -145,7 +154,11 @@ export function filas(datos, q, extra = q.extra) {
       }
     }
   }
-  for (const p of PAISES) porPais[p].sort((a, b) => (b.ok - a.ok) || a.precio - b.precio);
+  // "vel": los más rápidos primero (lectura), los que no la dicen al final; si no, por precio
+  const porVel = q.cat === "ssd" && q.f.vel;
+  for (const p of PAISES) {
+    porPais[p].sort((a, b) => (b.ok - a.ok) || (porVel && (b.lectura ?? -1) - (a.lectura ?? -1)) || a.precio - b.precio);
+  }
   return porPais;
 }
 
@@ -177,6 +190,18 @@ export function sugerencia(datos, q) {
     const sin = filas(datos, q, []);
     if (paises.some((p) => sin[p].length)) return { sinPalabras: q.extra };
   }
+  if (q.cat === "ssd" && (d.formato === "externo" || d.formato === "carry")) return null;  // no hay otro parecido
+  if (q.cat === "ssd" && d.linea) {
+    // un modelo sin stock (mp700 pro, t705 1tb): otro de la misma generación y capacidad
+    const gen = N.genDeLinea(d.linea);
+    const otra = { ...d, linea: null, gen: gen === 4 || gen === 5 ? gen : d.gen };
+    const hay = filas(datos, { ...q, f: otra }, []);
+    if (!paises.some((p) => hay[p].length)) return null;
+    const g = otra.gen ? `Gen${otra.gen}` : "M.2 NVMe";
+    const cap = d.capacidad_tb != null ? capacidad(d.capacidad_tb) : null;
+    return { busqueda: ["ssd", g.toLowerCase().replace("m.2 nvme", ""), cap?.toLowerCase()].filter(Boolean).join(" "),
+             que: `Otro SSD ${g}` + (cap ? ` de ${cap}` : "") };
+  }
   let candidatos = [];
   if (q.cat === "placas") {
     candidatos = misma.filter((m) => m.datos.chip === d.chip)
@@ -187,7 +212,9 @@ export function sugerencia(datos, q) {
       candidatos = misma.slice().sort((a, b) => Math.abs(a.datos.capacidad_gb - d.capacidad_gb) - Math.abs(b.datos.capacidad_gb - d.capacidad_gb));
     }
   } else if (q.cat === "ssd") {
-    candidatos = misma.filter((m) => m.datos.capacidad_tb === d.capacidad_tb);
+    // otro modelo con lo mismo (capacidad, generación, tipo); si no hay, la misma capacidad
+    candidatos = misma.filter((m) => N.coincideSsd({ ...d, linea: null }, m.datos, false));
+    if (!candidatos.length) candidatos = misma.filter((m) => m.datos.capacidad_tb === d.capacidad_tb && N.coincideSsd({ ...d, linea: null, capacidad_tb: null, gen: null }, m.datos, false));
   } else if (q.cat === "cpu") {
     const num = (d.modelo.match(/\d{3,5}/) || [""])[0];
     candidatos = misma.filter((m) => num && new RegExp(`(?<!\\d)${num}(?!\\d)`).test(m.nombre));
@@ -204,7 +231,31 @@ export function sugerencia(datos, q) {
 
 // ---------------------------------------------------------------- respuesta
 
+const capacidad = (tb) => (tb >= 1 ? `${tb}TB` : `${Math.round(tb * 1000)}GB`);
+
+function tipoSsd(d) {
+  const formato = d.formato || "2280";
+  if (formato === "externo" || formato === "carry") return formato;
+  if (d.interfaz === "SATA") return formato === "M.2" ? "SATA M.2" : "SATA";
+  return (d.gen ? `Gen${d.gen}` : "Gen s/d") + (formato === "2280" ? "" : ` · ${formato}`);
+}
+
+/** Un SSD en un renglón: "Samsung 990 Pro 2TB · Gen4 · 7.450/6.900 MB/s · Mwave A$249 ≈ $267.000". */
+function lineaSsd(f, cot) {
+  const d = f.m.datos;
+  const nombre = f.linea ? `${f.linea} ${capacidad(d.capacidad_tb)}` : f.detalle || f.m.nombre;
+  const vel = f.lectura && f.escritura ? `${miles(f.lectura)}/${miles(f.escritura)} MB/s`
+    : f.lectura ? `${miles(f.lectura)} MB/s` : "vel. s/d";
+  const tienda = `<a href="${escapar(f.url)}">${escapar(f.tienda)}</a>`;
+  let precio;
+  if (f.pais === "AU") precio = `<b>${plata(f.precio, "AUD")}</b>` + (cot ? ` ≈ ${ars(f.precio * cot.aud_usd * cot.mep)}` : "");
+  else precio = `<b>${ars(f.precio)}</b>${f.tipo ? " " + f.tipo : ""}` + (cot ? ` ≈ ${usd(f.precio / cot.mep)}` : "");
+  return [escapar(nombre), tipoSsd(d), vel, `${tienda} ${precio}`].join(" · ") +
+    (f.ok ? "" : ` · ⚠️ stock sin confirmar (${escapar(f.motivo)})`);
+}
+
 function linea(f, cot, varios) {
+  if (f.m.cat === "ssd") return lineaSsd(f, cot);
   const tienda = `<a href="${escapar(f.url)}">${escapar(f.tienda)}</a>`;
   let precio;
   if (f.pais === "AU") {
@@ -218,7 +269,16 @@ function linea(f, cot, varios) {
   return `${precio} · ${tienda}\n   ${detalle}`;
 }
 
+function tituloSsd(f) {
+  const cap = f.capacidad_tb != null ? " " + capacidad(f.capacidad_tb) : "";
+  if (f.linea) return f.linea + cap;
+  const tipo = f.formato === "externo" ? "SSD externo" : f.formato === "carry" ? "Carry / enclosure"
+    : f.sata ? "SSD SATA" : `SSD M.2 NVMe ${f.gen ? "Gen" + f.gen : "Gen4/Gen5"}${f.formato ? " " + f.formato : ""}`;
+  return tipo + cap;
+}
+
 function titulo(q, porPais, texto) {
+  if (q.cat === "ssd") return tituloSsd(q.f) + (q.f.vel ? " — por velocidad" : "");
   const modelos = new Set(PAISES.flatMap((p) => porPais[p].slice(0, q.cantidad).map((f) => f.m.nombre)));
   if (modelos.size === 1) return [...modelos][0];
   const f = q.f;
@@ -226,7 +286,6 @@ function titulo(q, porPais, texto) {
     case "placas": return f.vram ? `${f.chip} ${f.vram}GB` : f.chip;
     case "ram": return `RAM DDR5 ${f.capacidad_gb}GB` + (f.dijo.modulos ? ` (${f.modulos}x${f.capacidad_gb / f.modulos})` : "") +
       (f.dijo.velocidad ? ` ${f.velocidad}` : "") + (f.dijo.cl ? ` CL${f.cl}` : "");
-    case "ssd": return `SSD ${f.capacidad_tb >= 1 ? f.capacidad_tb + "TB" : f.capacidad_tb * 1000 + "GB"}`;
     case "pcs": return "PC armada" + (f.chip ? ` con ${f.chip}` : "") + (f.cpu ? ` y ${f.cpu}` : "");
     case "cpu": return f.modelo;
     default: return texto.trim();
@@ -244,14 +303,17 @@ function numeroClave(q) {
 function postsQueCoinciden(datos, q) {
   if (q.pais === "AR") return [];
   const numero = numeroClave(q);
-  return (datos.posts || []).filter(([tit, , , , , limpio]) => {
+  return (datos.posts || []).filter(([tit, , , , , limpio, ssd]) => {
+    if (q.cat === "ssd") {     // ya lo parseó Python (JSON viejo: acá)
+      const s = ssd !== undefined ? ssd : N.ssd(limpio ?? N.limpiar(tit));
+      return Boolean(s) && N.coincideSsd(q.f, s);
+    }
     const t = limpio ?? N.limpiar(tit);
     if (numero && !t.includes(numero)) return false;
     switch (q.cat) {
       case "placas": return N.chipGpu(t) === q.f.chip;
       case "cpu": return N.cpu(t)?.modelo === q.f.modelo;
       case "ram": return N.ram(t)?.capacidad_gb === q.f.capacidad_gb;
-      case "ssd": return N.ssd(t)?.capacidad_tb === q.f.capacidad_tb;
       case "pcs": return Boolean(q.f.chip) && N.chipGpu(t) === q.f.chip && N.esPcArmada(t);
       default: return q.texto.split(" ").every((w) => conPalabra(w, t));
     }
@@ -315,11 +377,13 @@ export function buscar(datos, texto, ahora = Date.now(), marcas = {}, q0 = null)
     if (s?.sinPalabras) {
       const sin = q.texto.split(" ").filter((w) => !s.sinPalabras.includes(w)).join(" ").toLowerCase();
       txt += `\nSin «${escapar(s.sinPalabras.join(" ").toLowerCase())}» sí hay: /buscar ${escapar(sin)}${q.pais ? " " + q.pais.toLowerCase() : ""}${r}`;
+    } else if (s?.busqueda) {
+      txt += `\n${escapar(s.que)}: /buscar ${escapar(s.busqueda)}${q.pais ? " " + q.pais.toLowerCase() : ""}${r}`;
     } else if (s?.modelo) {
       txt += `\n¿Quisiste decir <b>${escapar(s.modelo.nombre)}</b>? → /buscar ${escapar(s.modelo.nombre.toLowerCase())}` +
         (q.pais ? " " + q.pais.toLowerCase() : "") + r;
     } else {
-      txt += "\nProbá con el chip, el modelo o la capacidad: /buscar 5070 ti · /buscar ddr5 32gb · /buscar ssd 2tb";
+      txt += "\nProbá con el chip, el modelo o la capacidad: /buscar 5070 ti · /buscar ddr5 32gb · /buscar ssd gen4 2tb";
     }
     return { texto: txt + "\n\n" + pie(datos, ahora) };
   }
@@ -335,7 +399,7 @@ export function buscar(datos, texto, ahora = Date.now(), marcas = {}, q0 = null)
     const n = top[p].length;
     const mezcla = top[p].some((f) => f.ok) && top[p].some((f) => !f.ok);
     const cuantos = n === 1 ? (top[p][0].ok ? "el único con stock" : "el único que encontré")
-      : `los ${n} más baratos` + (mezcla ? " (primero los de stock confirmado)" : "");
+      : `los ${n} más ${q.cat === "ssd" && q.f.vel ? "rápidos" : "baratos"}` + (mezcla ? " (primero los de stock confirmado)" : "");
     bloques.push(`${BANDERA[p]} <b>${NOMBRE_PAIS[p]}</b> — ${cuantos}\n` +
       top[p].map((f, i) => `${i + 1}. ${linea(f, datos.cot, varios)}`).join("\n"));
   }
@@ -346,7 +410,8 @@ export function buscar(datos, texto, ahora = Date.now(), marcas = {}, q0 = null)
     let cab = `⚖️ <b>Traerlo de 🇦🇺</b>: el más barato de cada país (${plata(au.precio, "AUD")} contra ${ars(ar.precio)})`;
     const dudosos = [au, ar].filter((f) => !f.ok).map((f) => `${BANDERA[f.pais]} ${f.tienda}`);
     if (dudosos.length) cab += `\n   ⚠️ stock sin confirmar: ${escapar(dudosos.join(", "))}`;
-    if (au.m.nombre !== ar.m.nombre) cab += `\n   ojo: no es el mismo modelo (${escapar(au.m.nombre)} / ${escapar(ar.m.nombre)})`;
+    const cual = (f) => (f.m.cat === "ssd" ? `${f.linea || f.detalle} ${capacidad(f.m.datos.capacidad_tb)}` : f.m.nombre);
+    if (cual(au) !== cual(ar)) cab += `\n   ojo: no es el mismo modelo (${escapar(cual(au))} / ${escapar(cual(ar))})`;
     if (q.cat === "pcs") cab += "\n   (contra la PC armada más barata de 🇦🇷; las alertas además la comparan por partes)";
     bloques.push([cab, ...lineasCuenta(c, "AR", valija, datos.reglas)].join("\n"));
   }

@@ -116,7 +116,10 @@ def equivalente(db: DB, categoria: str, modelo: str, datos: dict, pais_otro: str
 
     if categoria == "ssd":
         cap, interfaz, gen = datos.get("capacidad_tb"), datos.get("interfaz"), _num(datos.get("gen"))
-        mismos = [r for r in filas if r["_d"].get("capacidad_tb") == cap and r["_d"].get("interfaz") == interfaz]
+        formato = datos.get("formato") or "2280"
+        mismos = [r for r in filas if r["_d"].get("capacidad_tb") == cap and r["_d"].get("interfaz") == interfaz
+                  and (r["_d"].get("formato") or "2280") == formato
+                  and (interfaz == "SATA" or bool(r["_d"].get("gen")) == bool(gen))]
         r = _mas_parecido(mismos, lambda r: abs((_num(r["_d"].get("gen")) or gen or 0) - (gen or 0)))
         if not r:
             return None

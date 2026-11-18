@@ -14,7 +14,7 @@ from bot.comparar import cuenta, lineas_cuenta
 from bot.cotizaciones import Cotizacion
 from bot.db import DB
 from bot.modelos import Oferta
-from bot.normalizar import chip_gpu, limpiar, normalizar, vram_de
+from bot.normalizar import chip_gpu, consulta_ssd, limpiar, normalizar, vram_de
 
 RAIZ = Path(__file__).resolve().parent.parent
 WORKER = RAIZ / "worker"
@@ -54,12 +54,37 @@ TITULOS = [
     ("ssd", "Samsung T7 Portable SSD 1TB USB 3.2"),
     ("ssd", "SSD Lexar NM790 4TB PCIe Gen 4x4"),
     ("ssd", "ADATA Legend 960 Max 2TB"),
+    ("ssd", "Disco Solido SSD M.2 Samsung 2TB 990 EVO PLUS 7250MB/s NVMe PCI-E Gen5 2.0"),
+    ("ssd", "Disco Solido SSD M.2 ADATA 2TB XPG MARS 980 PRO AIR 14000MB/s NVMe PCIe Gen5 x4"),
+    ("ssd", "SP Silicon Power UD90 1TB PCIe Gen4 x4 NVMe M.2 2280 SSD, 5000MB/s Read, 4800MB/s Write"),
+    ("ssd", "Crucial P310 2TB PCIe 4.0 M.2 NVMe 2230 SSD (CT2000P310SSD2)"),
+    ("ssd", "Disco Solido SSD 256GB Hiksemi Wave M.2 NVMe PCIe x4 3.0"),
+    ("ssd", "Disco Solido SSD 2TB Patriot P410 M.2 PCIe NVMe 4.0 X4"),
+    ("ssd", "Disco Solido SSD M.2 Team 1TB MP44 7000MB/s NVMe PCI-E Gen4 x4"),
+    ("ssd", "Disco Solido SSD M.2 Team 500GB MP44L 5000MB/s NVMe PCI-E x4 Gen4"),
+    ("ssd", "Kingston Renegade 2TB PCIe 4.0 M.2 2280 NVMe SSD with HeatSink (SFYRDK/2000G)"),
+    ("ssd", "WD Blue SA510 SATA SSD M.2 2280 - 250GB"),
+    ("ssd", "Kingston A400 960GB 2.5in SATA III SSD"),
+    ("ssd", "Orico M.2 NVMe SSD Enclosure USB-C 2TB"),
+    ("ssd", "Samsung 990PRO 4TB 7.450/6.900 MB/s"),
+    ("ssd", "Silicon Power 5TB Armor A60 Portable External Hard Drive USB 3.0"),
+    ("consulta_ssd", "ssd gen5 2tb"),
+    ("consulta_ssd", "990pro 2tb"),
+    ("consulta_ssd", "samsung 990 pro nvme"),
+    ("consulta_ssd", "sn850x vel"),
+    ("consulta_ssd", "mp700 pro"),
+    ("consulta_ssd", "ssd sata 1tb"),
+    ("consulta_ssd", "ssd externo 2tb"),
+    ("consulta_ssd", "ssd 2230 1tb"),
+    ("consulta_ssd", "ddr5 32gb"),
 ]
 
 
 def _python(categoria: str, titulo: str) -> dict:
     t = limpiar(titulo)
     r = {"t": t, "chip": chip_gpu(t), "vram": vram_de(t)}
+    if categoria == "consulta_ssd":
+        return {**r, "consulta": consulta_ssd(t)}
     o = normalizar(Oferta(tienda="x", pais="AU", categoria=categoria, titulo=titulo, url="u", precio=100, moneda="AUD"))
     if categoria == "placas":
         r["placa"] = None if o.descartada else o.modelo
@@ -68,7 +93,7 @@ def _python(categoria: str, titulo: str) -> dict:
     elif categoria == "ram":
         r["ram"] = None if o.descartada else {k: o.datos[k] for k in ("capacidad_gb", "modulos", "velocidad", "cl")}
     elif categoria == "ssd":
-        r["ssd"] = None if o.descartada else {k: o.datos[k] for k in ("capacidad_tb", "interfaz", "gen")}
+        r["ssd"] = None if o.descartada else o.datos
     return r
 
 
@@ -96,7 +121,7 @@ def test_mismo_normalizador_que_los_avisos():
             continue   # Python además descarta fuera de 32–128GB y la de notebook: el Worker no busca eso
         if cat == "ssd" and py["ssd"] is None and j["ssd"] is None:
             continue
-        clave = {"placas": "placa", "cpu": "cpu", "ram": "ram", "ssd": "ssd"}[cat]
+        clave = {"placas": "placa", "cpu": "cpu", "ram": "ram", "ssd": "ssd", "consulta_ssd": "consulta"}[cat]
         assert j[clave] == py[clave], titulo
 
 
@@ -155,7 +180,7 @@ def test_exportar_compacto():
     assert len(ar) == exportar.POR_MODELO and [f[2] for f in ar] == sorted(f[2] for f in ar)
     assert d["tiendas"][ar[0][3]] == "Venex" and ar[0][5] == "MSI Ventus" and ar[0][6] == 10 and ar[0][7] == "contado"
     assert au[0][8] == 1 and au[0][2] == 1799          # staticICE: avisa que no informa stock
-    assert d["posts"] == [["RTX 5070 Ti $1599 @ Scorptec", "https://oz/1", 40, 1599.0, 120, limpiar("RTX 5070 Ti $1599 @ Scorptec")]]
+    assert d["posts"] == [["RTX 5070 Ti $1599 @ Scorptec", "https://oz/1", 40, 1599.0, 120, limpiar("RTX 5070 Ti $1599 @ Scorptec"), None]]
     from bot.stock import clave_url
     assert all(f[10] == clave_url(f[4]) for f in d["p"])        # la clave del botón ❌ ya calculada
     assert "Tiendas" in d["estado"] or "Todavía" in d["estado"]

@@ -87,7 +87,8 @@ resumen_diario:
     pcs: [RTX 5070 Ti]
 
 mothers: {activo: true, chipsets: [B850, X870, X870E], wifi: true}
-# SSD: los posts de OzBargain avisan (por votos u objetivo); en las tiendas todavía no.
+# SSD: los posts de OzBargain avisan (por votos u objetivo); en las tiendas todavía no. Solo M.2 2280
+# NVMe Gen4/Gen5 (ni SATA, ni externos, ni Gen3, ni 2230/2242). Modelos y velocidades: ssd_modelos.yaml
 ssd: {activo: true, capacidad_tb: [2, 4], gen_min: 4}
 fuentes: {activo: true, watts_min: 850, certificacion_min: Gold, atx3: true}
 refrigeracion: {activo: true, tipos: [AIO 360, AIO 280]}

@@ -217,3 +217,80 @@ test("r<N>: hasta 16; si pedís más, 16 y lo avisa; r7 9800x3d es Ryzen", () =>
   // sin resultados: la sugerencia mantiene la cantidad
   assert.match(buscar(d, "zotac 5070 ti r10", AHORA).texto, /No encontré «zotac 5070 ti»[\s\S]*\/buscar 5070 TI r10/i);
 });
+
+// ---------------------------------------------------------------- SSD
+
+function datosSsd() {
+  return preparar({
+    v: 2, ts: "2026-11-18T15:00:00+00:00",
+    cot: { mep: 1600, aud_usd: 0.67, nota: null },
+    reglas: { franquicia_usd: 500, arancel: 0.5, valija_aud: 150, conviene_pct: 10 },
+    tiendas: ["Mwave", "Umart", "Compra Gamer"],
+    modelos: [
+      ["SSD NVMe Gen4 2TB", "ssd", { capacidad_tb: 2, interfaz: "NVMe", gen: 4, formato: "2280" }],
+      ["SSD NVMe Gen5 2TB", "ssd", { capacidad_tb: 2, interfaz: "NVMe", gen: 5, formato: "2280" }],
+      ["SSD NVMe Gen4 2TB 2230", "ssd", { capacidad_tb: 2, interfaz: "NVMe", gen: 4, formato: "2230" }],
+      ["SSD SATA 2TB", "ssd", { capacidad_tb: 2, interfaz: "SATA", formato: "2.5" }],
+      ["SSD NVMe 2TB", "ssd", { capacidad_tb: 2, interfaz: "NVMe", formato: "2280" }],
+      ["SSD NVMe Gen4 1TB", "ssd", { capacidad_tb: 1, interfaz: "NVMe", gen: 4, formato: "2280" }],
+    ],
+    p: [
+      [0, "AU", 249, 0, "https://mw/990", "Samsung 990 Pro", 30, "", 0, 0, "a1", ["Samsung 990 Pro", 7450, 6900]],
+      [0, "AU", 189, 1, "https://u/nv3", "Kingston NV3", 30, "", 0, 0, "a2", ["Kingston NV3", 6000, 5000]],
+      [0, "AU", 179, 1, "https://u/sd", "Sandisk 2TB Optimus GX PRO 850X", 30, "", 0, 0, "a3", [null, null, null]],
+      [1, "AU", 399, 1, "https://u/9100", "Samsung 9100 Pro", 30, "", 0, 0, "a4", ["Samsung 9100 Pro", 14700, 13400]],
+      [1, "AU", 359, 0, "https://mw/t705", "Crucial T705", 30, "", 0, 1, "a5", ["Crucial T705", 14500, 12700]],
+      [2, "AU", 150, 1, "https://u/p310", "Crucial P310", 30, "", 0, 0, "a6", ["Crucial P310", null, null]],
+      [3, "AU", 120, 1, "https://u/mx", "Crucial MX500", 30, "", 0, 0, "a7", ["Crucial MX500", null, null]],
+      [4, "AU", 110, 1, "https://u/gx", "Sandisk Optimus GX 7100", 30, "", 0, 0, "a8", [null, null, null]],
+      [0, "AR", 420_000, 2, "https://cg/990", "Samsung 990 Pro", 30, "transferencia", 0, 0, "a9", ["Samsung 990 Pro", 7450, 6900]],
+      [5, "AU", 129, 1, "https://u/990-1", "Samsung 990 Pro", 30, "", 0, 0, "b1", ["Samsung 990 Pro", 7450, 6900]],
+    ],
+    motivos: ["", "Mwave no informa stock"],
+    posts: [["Samsung 990 Pro 2TB $239 @ Amazon AU", "https://oz/9", 30, 239, 60, "SAMSUNG 990 PRO 2TB $239 @ AMAZON AU"],
+            ["Crucial P310 2TB 2230 $140 @ Amazon AU", "https://oz/8", 30, 140, 60, "CRUCIAL P310 2TB 2230 $140 @ AMAZON AU"]],
+    estado: "", filtros: "",
+  });
+}
+
+const sinLinks = (t) => t.replace(/<a href="[^"]*">([^<]*)<\/a>/g, "$1");
+
+test("SSD: un renglón por producto, con Gen y velocidad; sin pedirlo, solo M.2 2280 NVMe Gen4/Gen5", () => {
+  const t = sinLinks(responderBusqueda(datosSsd(), "ssd 2tb au r16", AHORA));
+  assert.match(t, /SSD M\.2 NVMe Gen4\/Gen5 2TB/);
+  assert.match(t, /\n1\. Sandisk 2TB Optimus GX PRO 850X · Gen4 · vel\. s\/d · Umart <b>A\$179<\/b> ≈ \$191\.888\n/);
+  assert.match(t, /Samsung 990 Pro 2TB · Gen4 · 7\.450\/6\.900 MB\/s · Mwave <b>A\$249<\/b> ≈ \$266\.928/);
+  assert.match(t, /Crucial T705 2TB · Gen5 · 14\.500\/12\.700 MB\/s · Mwave <b>A\$359<\/b> ≈ \$384\.848 · ⚠️ stock sin confirmar \(Mwave no informa stock\)/);
+  for (const no of ["P310", "MX500", "GX 7100", "990 Pro 1TB"]) assert.ok(!t.includes(no), no);   // 2230, SATA, gen s/d, otra capacidad
+});
+
+test("SSD: por modelo (990pro = 990 PRO = Samsung 990 Pro NVMe), generación, capacidad y país", () => {
+  for (const q of ["990 pro 2tb", "990pro 2tb", "Samsung 990 Pro NVMe 2tb", "samsung 990 PRO 2TB"]) {
+    const t = sinLinks(responderBusqueda(datosSsd(), q, AHORA));
+    assert.match(t, /🔎 <b>Samsung 990 Pro 2TB<\/b>/, q);
+    assert.ok(!t.includes("NV3") && !t.includes("1TB ·"), q);
+    assert.match(t, /Compra Gamer <b>\$420\.000<\/b> transferencia ≈ USD 262/, q);
+  }
+  const todos = sinLinks(responderBusqueda(datosSsd(), "990 pro au", AHORA));
+  assert.match(todos, /Samsung 990 Pro 1TB/);
+  assert.match(todos, /Samsung 990 Pro 2TB/);
+  const g5 = sinLinks(responderBusqueda(datosSsd(), "ssd gen5 2tb au r10", AHORA));
+  assert.match(g5, /SSD M\.2 NVMe Gen5 2TB<\/b> en 🇦🇺/);
+  assert.ok(g5.includes("9100 Pro") && g5.includes("T705") && !g5.includes("990 Pro") && !g5.includes("Argentina"));
+  // el post de OzBargain del mismo modelo, no el de 2230
+  const post = responderBusqueda(datosSsd(), "990 pro 2tb", AHORA);
+  assert.ok(post.includes("https://oz/9") && !post.includes("https://oz/8"));
+});
+
+test("SSD: vel ordena por lectura; sata, 2230 y gen3 solo si los pedís; sugerencia de otro modelo", () => {
+  const v = sinLinks(responderBusqueda(datosSsd(), "ssd 2tb au vel r16", AHORA));
+  const orden = [...v.matchAll(/\n\d+\. ([^·]+) ·/g)].map((m) => m[1].trim());
+  // primero lo de stock confirmado (el T705 de Mwave no lo está): 9100 Pro, 990 Pro, NV3 y el que no dice
+  assert.deepEqual(orden, ["Samsung 9100 Pro 2TB", "Samsung 990 Pro 2TB", "Kingston NV3 2TB", "Sandisk 2TB Optimus GX PRO 850X", "Crucial T705 2TB"]);
+  assert.match(v, /los 5 más rápidos/);
+  assert.match(sinLinks(responderBusqueda(datosSsd(), "ssd sata 2tb", AHORA)), /Crucial MX500 2TB · SATA · vel\. s\/d/);
+  assert.match(sinLinks(responderBusqueda(datosSsd(), "ssd 2230 2tb", AHORA)), /Crucial P310 2TB · Gen4 · 2230 · vel\. s\/d/);
+  const nada = responderBusqueda(datosSsd(), "t700 2tb au r3", AHORA);
+  assert.match(nada, /No encontré «t700 2tb au»/);
+  assert.match(nada, /Otro SSD Gen5 de 2TB: \/buscar ssd gen5 2tb au r3/);
+});

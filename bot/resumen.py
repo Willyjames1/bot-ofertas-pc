@@ -13,7 +13,7 @@ from .comparar import BANDERA, cuenta, plata, valija_de
 from .config import TZ_AR
 from .cotizaciones import Cotizacion, ars
 from .db import DB
-from .normalizar import canon, parsear_chip_config
+from .normalizar import canon, coincide_ssd, consulta_ssd, limpiar, parsear_chip_config
 
 log = logging.getLogger("bot.resumen")
 CLAVE_ESTADO = "resumen_diario"
@@ -27,6 +27,9 @@ def _coincide(categoria: str, nombre: str, modelo: str, datos: dict) -> bool:
         return ram_cumple(nombre, datos)
     if categoria == "pcs":
         return canon(datos.get("chip") or "") == canon(nombre)
+    if categoria == "ssd":   # "990 Pro 2TB", "Gen5 2TB", "SN850X 4TB": como /buscar
+        q = consulta_ssd(limpiar(f"SSD {nombre}"))
+        return q is not None and coincide_ssd(q, datos)
     return canon(modelo) == canon(nombre)
 
 
@@ -47,6 +50,8 @@ def _titulo(categoria: str, nombre: str) -> str:
         return f"RAM DDR5 {nombre}"
     if categoria == "pcs":
         return f"PC armada con {nombre}"
+    if categoria == "ssd":
+        return f"SSD {nombre}"
     return nombre
 
 

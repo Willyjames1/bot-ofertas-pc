@@ -149,24 +149,104 @@ export function ram(t) {
 }
 
 // ---------------------------------------------------------------- SSD
+// (la tabla de modelos sale de ssd_modelos.yaml: SSD_MODELOS = [nombre, marca, gen, [[tb, lectura, escritura]]])
 
-const EQUIV_TB = { 0.24: 0.25, 0.256: 0.25, 0.48: 0.5, 0.512: 0.5, 0.96: 1.0 };
+export const marcaSsd = (t) => G.MARCAS_SSD.find(([k]) => t.includes(k))?.[1] ?? null;
 
-/** {capacidad_tb, interfaz, gen, linea} como parsear_ssd. null si no es un SSD interno. */
+/** [índice en SSD_MODELOS, palabras] del modelo que nombra el texto (si no es de otra marca), o null.
+ *  Juntando hasta MAX_PALABRAS_ALIAS palabras seguidas, como buscar_linea_ssd en Python. */
+function buscarLinea(t) {
+  const marca = marcaSsd(t);
+  const w = t.split(/[^A-Z0-9]+/).filter(Boolean);
+  for (let i = 0; i < w.length; i++) {
+    for (let n = Math.min(G.MAX_PALABRAS_ALIAS, w.length - i); n > 0; n--) {
+      const j = G.SSD_ALIAS[w.slice(i, i + n).join("")];
+      if (j !== undefined && (marca === null || G.SSD_MODELOS[j][1] === marca)) return [j, w.slice(i, i + n)];
+    }
+  }
+  return null;
+}
+
+export const lineaSsd = (t) => buscarLinea(t)?.[0] ?? null;
+
+export function capacidadSsd(t) {
+  let m;
+  if ((m = R.RE_SSD_TB.exec(t))) return parseFloat(m[1].replace(",", "."));
+  if ((m = R.RE_SSD_GB.exec(t))) return G.GB_A_TB[m[1]];
+  return null;
+}
+
+const mbs = (x) => parseInt(x.replace(/[.,]/g, ""), 10);
+
+/** [lectura, escritura]: primero el título; si no la dice, la tabla (como velocidad_ssd en Python). */
+export function velocidadSsd(t, tb, linea) {
+  for (const rx of [R.RE_SSD_VEL_RW, R.RE_SSD_VEL_PAR]) {
+    const m = rx.exec(t);
+    if (m) {
+      const r = mbs(m[1]), w = mbs(m[2]);
+      if (r >= 400 && r <= 16000 && w >= 100 && w <= r * 1.2) return [r, w];
+    }
+  }
+  const fila = linea !== null ? G.SSD_MODELOS[linea][3].find(([cap]) => cap === tb) : null;
+  const tabla = fila ? [fila[1], fila[2]] : null;
+  const m = R.RE_SSD_VEL.exec(t);
+  if (m) {
+    const r = mbs(m[1]);
+    if (r >= 400 && r <= 16000) return tabla && tabla[0] === r ? tabla : [r, null];
+  }
+  return tabla || [null, null];
+}
+
+/** Lo mismo que datos_ssd en Python (null si no es un SSD o no dice la capacidad). */
 export function ssd(t, exigirPalabra = true) {
   if (R.SSD_NO.test(t)) return null;
-  const linea = G.LINEAS_SSD.find(([n]) => t.includes(n)) || null;
-  if (exigirPalabra && !R.SSD_SI.test(t) && !linea) return null;
-  let tb, m;
-  if ((m = R.RE_SSD_TB.exec(t))) tb = parseFloat(m[1].replace(",", "."));
-  else if ((m = R.RE_SSD_GB.exec(t))) tb = Math.round((parseInt(m[1], 10) / 1000) * 100) / 100;
-  else return null;
-  tb = EQUIV_TB[tb] ?? tb;
-  const g = R.RE_SSD_GEN.exec(t);
-  const gen = g ? parseInt(g[1], 10) : linea ? linea[2] || null : null;
+  const i = lineaSsd(t);
+  if (exigirPalabra && !R.SSD_SI.test(t) && i === null) return null;
+  const tb = capacidadSsd(t);
+  if (tb === null) return null;
+  const linea = i !== null ? G.SSD_MODELOS[i] : null;
   const sata = (t.includes("SATA") && !t.includes("NVME")) || (linea !== null && linea[2] === 0);
-  return { capacidad_tb: tb, interfaz: sata ? "SATA" : "NVMe", gen: sata ? null : gen, linea: linea ? linea[0] : null,
-           dijo: { gen: Boolean(g) || Boolean(linea), interfaz: t.includes("SATA") || t.includes("NVME") } };
+  let formato, m;
+  if (R.SSD_CARRY.test(t)) formato = "carry";
+  else if (R.SSD_EXTERNO.test(t)) formato = "externo";
+  else if (sata) formato = t.includes("M.2") ? "M.2" : "2.5";
+  else if ((m = R.RE_SSD_FORMA.exec(t))) formato = m[1];
+  else formato = "2280";
+  let gen = null;
+  if (!sata) gen = linea !== null ? linea[2] : ((m = R.RE_SSD_GEN.exec(t)) ? parseInt(m[1], 10) : null);
+  const [lectura, escritura] = velocidadSsd(t, tb, i);
+  return { capacidad_tb: tb, interfaz: sata ? "SATA" : "NVMe", gen, marca: linea ? linea[1] : marcaSsd(t), formato,
+           linea: linea ? linea[0] : null, lectura, escritura };
+}
+
+export const genDeLinea = (nombre) => G.SSD_MODELOS.find(([n]) => n === nombre)?.[2] ?? null;
+
+/** Lo que pide una búsqueda de SSD (consulta_ssd en Python), o null si no es de SSD. */
+export function consultaSsd(t) {
+  const l = buscarLinea(t);
+  const i = l ? l[0] : null;
+  if (R.SSD_NO.test(t) || !(R.SSD_SI.test(t) || i !== null || R.RE_SSD_TB.test(t))) return null;
+  const g = R.RE_SSD_GEN.exec(t);
+  let formato = null, m;
+  if (R.SSD_CARRY.test(t)) formato = "carry";
+  else if (R.SSD_EXTERNO.test(t)) formato = "externo";
+  else if ((m = R.RE_SSD_FORMA.exec(t)) && m[1] !== "2280") formato = m[1];
+  return { capacidad_tb: capacidadSsd(t), gen: g ? parseInt(g[1], 10) : null, linea: i !== null ? G.SSD_MODELOS[i][0] : null,
+           sata: t.includes("SATA"), formato, vel: R.RE_PIDE_VEL.test(t),
+           palabras: l ? l[1] : [] };     // las del modelo, que no filtran aparte
+}
+
+/** ¿El SSD d es lo que pide q? Sin pedirlo, solo M.2 2280 NVMe Gen4/Gen5 (coincide_ssd en Python).
+ *  conLinea = false: la línea se mira aparte (en /buscar va en cada publicación, no en el modelo). */
+export function coincideSsd(q, d, conLinea = true) {
+  if (q.capacidad_tb != null && d.capacidad_tb !== q.capacidad_tb) return false;
+  if (conLinea && q.linea && d.linea !== q.linea) return false;
+  const formato = d.formato || "2280";
+  if (q.formato === "externo" || q.formato === "carry") return formato === q.formato;
+  if (formato === "externo" || formato === "carry") return false;
+  if (q.sata) return d.interfaz === "SATA";
+  if (d.interfaz !== "NVMe" || formato !== (q.formato || "2280")) return false;
+  return q.gen ? d.gen === q.gen : d.gen === 4 || d.gen === 5;
 }
 
 export const descartable = (t) => R.USADO.test(t) || R.NOTEBOOK.test(t);

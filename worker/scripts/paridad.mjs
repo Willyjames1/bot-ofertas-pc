@@ -20,10 +20,11 @@ const salida = {
     if (categoria === "placas") r.placa = N.placa(t)?.modelo ?? null;
     if (categoria === "cpu") r.cpu = N.cpu(t)?.modelo ?? null;
     if (categoria === "ram") r.ram = sinDijo(N.ram(t));
-    if (categoria === "ssd") {
-      const s = sinDijo(N.ssd(t));
-      if (s) delete s.linea;
-      r.ssd = s;
+    if (categoria === "ssd") r.ssd = N.ssd(t);
+    if (categoria === "consulta_ssd") {
+      const c = N.consultaSsd(t);
+      if (c) delete c.palabras;
+      r.consulta = c;
     }
     return r;
   }),
