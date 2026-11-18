@@ -5,6 +5,7 @@ name = "bot-ofertas"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
 workers_dev = true
+preview_urls = false   # sin URLs extra por versión: solo la del webhook
 
 [vars]
 # el JSON que publica cada corrida en la rama "datos" (repo público: no hace falta token)
