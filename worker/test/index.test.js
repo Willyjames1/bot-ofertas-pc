@@ -93,3 +93,59 @@ test("secretos y mensajes largos", () => {
   assert.ok(partes.length > 1 && partes.every((p) => p.length <= 4000));
   assert.equal(partes.join("\n\n"), largo);
 });
+
+// KV de mentira (como env.OCULTOS)
+function kv() {
+  const m = new Map();
+  return { get: async (k) => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); }, m };
+}
+const boton = (data, de = 111, chat = 111) =>
+  new Request("https://bot.workers.dev/telegram", {
+    method: "POST",
+    headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": ENV.TELEGRAM_WEBHOOK_SECRET },
+    body: JSON.stringify({ update_id: 2, callback_query: { id: "cq1", data, from: { id: de },
+      message: { message_id: 7, chat: { id: chat }, reply_markup: { inline_keyboard: [[
+        { text: "❌ 🇦🇺 1", callback_data: data }, { text: "❌ 🇦🇺 2", callback_data: "x:00000000000000ff" }]] } } } }),
+  });
+
+test("❌ Sin stock: guarda la marca, contesta y cambia el botón; los resultados traen los botones", async () => {
+  const env = { ...ENV, OCULTOS: kv(), WORKER_SYNC_SECRET: "sync-de-prueba" };
+  await worker.fetch(mensaje("/buscar 5070 ti"), env);
+  const [envio] = aTelegram();
+  const teclado = envio.cuerpo.reply_markup.inline_keyboard;
+  assert.equal(teclado[0][0].text, "❌ 🇦🇺 1");
+  const data = teclado[0][0].callback_data;
+  assert.match(data, /^x:[0-9a-f]{16}$/);
+
+  pedidos = [];
+  await worker.fetch(boton(data), env);
+  const marcas = JSON.parse(env.OCULTOS.m.get("ocultos"));
+  assert.ok(marcas[data.slice(2)]);
+  const [respuesta, edicion] = aTelegram();
+  assert.match(respuesta.url, /answerCallbackQuery$/);
+  assert.match(respuesta.cuerpo.text, /lo oculto hasta que la tienda lo vuelva a mostrar con stock/);
+  assert.match(edicion.url, /editMessageReplyMarkup$/);
+  assert.deepEqual(edicion.cuerpo.reply_markup.inline_keyboard[0].map((b) => b.text), ["✅ 🇦🇺 1", "❌ 🇦🇺 2"]);
+
+  // la misma búsqueda ya no lo muestra
+  pedidos = [];
+  await worker.fetch(mensaje("/buscar 5070 ti"), env);
+  assert.match(aTelegram()[0].cuerpo.text, /No encontré «5070 ti»/);
+
+  // la corrida lo lee con el secreto; sin el secreto, 401
+  const sin = await worker.fetch(new Request("https://bot.workers.dev/ocultos"), env);
+  assert.equal(sin.status, 401);
+  const mal = await worker.fetch(new Request("https://bot.workers.dev/ocultos", { headers: { Authorization: "Bearer otro" } }), env);
+  assert.equal(mal.status, 401);
+  const ok = await worker.fetch(new Request("https://bot.workers.dev/ocultos",
+    { headers: { Authorization: "Bearer sync-de-prueba" } }), env);
+  assert.deepEqual(Object.keys((await ok.json()).ocultos), [data.slice(2)]);
+});
+
+test("botones de otro (o en otro chat): silencio y no guarda nada", async () => {
+  const env = { ...ENV, OCULTOS: kv() };
+  await worker.fetch(boton("x:00000000000000aa", 999, 111), env);
+  await worker.fetch(boton("x:00000000000000aa", 111, 999), env);
+  assert.equal(pedidos.length, 0);
+  assert.equal(env.OCULTOS.m.size, 0);
+});

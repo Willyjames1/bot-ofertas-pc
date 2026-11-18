@@ -163,3 +163,17 @@ def test_exportar_guarda_sin_espacios(tmp_path):
     ruta = tmp_path / "precios.json"
     n = exportar.guardar({"a": [1, 2], "b": "ñ"}, ruta)
     assert ruta.read_text(encoding="utf-8") == '{"a":[1,2],"b":"ñ"}' and n == len('{"a":[1,2],"b":"ñ"}'.encode())
+
+
+@sin_node
+def test_misma_clave_para_el_boton_sin_stock():
+    """El botón "❌ Sin stock" lleva sha1(link)[:16]: el Worker y la corrida tienen que calcular lo mismo."""
+    from bot.stock import clave_url
+    urls = ["https://www.mwave.com.au/products/msi-rtx-5070-ti-ac92600?variant=47995034927235&currency=AUD",
+            "https://www.hardgamers.com.ar/product/maxTecno:fqg5hv", "https://tienda.com/ñandú?x=1&y=á", ""]
+    codigo = ("import { claveUrl } from './src/sha1.js';"
+              f"console.log(JSON.stringify({json.dumps(urls)}.map(claveUrl)));")
+    p = subprocess.run([NODE, "--input-type=module", "-e", codigo], capture_output=True, text=True,
+                       encoding="utf-8", cwd=WORKER, timeout=60)
+    assert p.returncode == 0, p.stderr
+    assert json.loads(p.stdout) == [clave_url(u) for u in urls]

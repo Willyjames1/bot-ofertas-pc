@@ -40,6 +40,7 @@ class Aviso:
     texto: str
     pais: str | None = None
     precio: float | None = None
+    url: str | None = None      # la publicación (para verificar el stock y el botón "❌ Sin stock")
 
 
 def plata(x: float | None, moneda: str) -> str:
@@ -273,13 +274,20 @@ class Motor:
         if o.datos.get("via") == "staticICE":
             fecha = o.datos.get("actualizado", "")
             fecha = f"{fecha[8:10]}/{fecha[5:7]}" if len(fecha) == 10 else "?"
-            lineas.append(f"ℹ️ Precio visto en staticICE (actualizado el {fecha}): confirmá precio y stock en la tienda")
+            lineas.append(f"ℹ️ Precio visto en staticICE (actualizado el {fecha}): confirmá el precio en la tienda")
         lineas.append(f'🔗 <a href="{escape(o.url)}">Ver en la tienda</a>')
         return "\n".join(lineas)
 
     # -------------------------------------------------- ofertas de tiendas
     def evaluar_oferta(self, o: Oferta, info: dict) -> list[Aviso]:
-        # stock None = la fuente no lo informa (staticICE): se evalúa igual y el aviso lo aclara
+        avisos = self._evaluar_oferta(o, info)
+        for a in avisos:
+            a.url = a.url or o.url
+        return avisos
+
+    def _evaluar_oferta(self, o: Oferta, info: dict) -> list[Aviso]:
+        # stock None = la fuente no lo informa (staticICE): se evalúa igual; antes de mandar el aviso
+        # se mira la tienda real (filtrar_por_stock) y, si no se pudo confirmar, el aviso lo dice
         if o.descartada or not o.modelo or o.stock is False:
             return []
         if not pasa_filtros(self.cfg, o.categoria, o.modelo, o.datos, o.precio, o.moneda, o.tray, o.combo):
@@ -364,6 +372,8 @@ class Motor:
                 for r in self.db.ofertas_recientes(pais, horas=6):
                     if r["categoria"] != cat or r["sospechoso"] or r["stock"] == 0:
                         continue
+                    if self.db.estado_stock().de(r).nivel == "no":
+                        continue
                     datos = json.loads(r["datos"] or "{}")
                     if not pasa_filtros(self.cfg, cat, r["modelo"], datos, r["precio"], r["moneda"],
                                         bool(r["tray"]), bool(r["combo"])):
@@ -392,9 +402,9 @@ class Motor:
                                       f"({escape(NOMBRE_TIENDA.get(rb['tienda'], rb['tienda']))})")
                     lineas += self._comparacion(pais, cat, ra["modelo"], datos_a, ra["precio"])
                     if datos_a.get("via") == "staticICE":
-                        lineas.append("ℹ️ Precio visto en staticICE: confirmá precio y stock en la tienda")
+                        lineas.append("ℹ️ Precio visto en staticICE: confirmá el precio en la tienda")
                     lineas.append(f'🔗 <a href="{escape(ra["url"])}">Ver en la tienda</a>')
-                    avisos.append(Aviso("oportunidad", clave, True, "\n".join(lineas), pais, ra["precio"]))
+                    avisos.append(Aviso("oportunidad", clave, True, "\n".join(lineas), pais, ra["precio"], ra["url"]))
         return avisos
 
     # -------------------------------------------------- foros
@@ -483,6 +493,43 @@ class Motor:
 
 # ------------------------------------------------------------------ despacho
 
+# ------------------------------------------------------------------ stock antes de avisar
+
+def _con_linea(texto: str, linea: str) -> str:
+    """Agrega una línea antes del "🔗 Ver en la tienda" (o al final)."""
+    i = texto.rfind("\n🔗")
+    return texto[:i] + "\n" + linea + texto[i:] if i >= 0 else texto + "\n" + linea
+
+
+def filtrar_por_stock(avisos: list[Aviso], db: DB, verificador=None) -> list[Aviso]:
+    """Antes de mandar: lo que está sin stock no se avisa (tampoco lo que marcaste "❌ Sin stock").
+    Para los urgentes que vienen de un comparador o de una tienda que no informa stock, se mira
+    la tienda real en el momento; si no se puede confirmar, el aviso sale con "⚠️ Stock sin confirmar"."""
+    salida = []
+    for a in avisos:
+        fila = db.c.execute("SELECT * FROM ofertas WHERE url=?", (a.url,)).fetchone() if a.url else None
+        if fila is None:
+            salida.append(a)
+            continue
+        if a.urgente and verificador is not None and db.estado_stock().necesita_verificar(fila):
+            v = verificador.verificar(a.url)
+            db.guardar_verificacion(a.url, v.disponible, v.motivo, fila["precio"], v.destino)
+        e = db.estado_stock().de(fila)
+        if e.nivel == "no":
+            log.info("No aviso %s: %s", a.clave, e.motivo)
+            continue
+        if e.nivel == "?" and a.urgente:
+            a.texto = _con_linea(a.texto, f"⚠️ Stock sin confirmar: {escape(e.motivo)}")
+        salida.append(a)
+    return salida
+
+
+def boton_sin_stock(url: str | None) -> list | None:
+    """El botón que va debajo de cada aviso: lo tocás y la publicación se oculta (ver worker/)."""
+    from .stock import clave_url
+    return [[{"text": "❌ Sin stock", "callback_data": f"x:{clave_url(url)}"}]] if url else None
+
+
 def _en_rango(hora: time, desde: str, hasta: str) -> bool:
     d, h = time.fromisoformat(desde), time.fromisoformat(hasta)
     return d <= hora < h if d <= h else (hora >= d or hora < h)
@@ -517,7 +564,7 @@ def despachar(avisos: list[Aviso], tg: Telegram, db: DB, cfg: dict, aj: dict, se
         sueltas = urgentes if silencio else urgentes[:libres]
         juntas = [] if silencio else urgentes[libres:]
         for a in sueltas:
-            if tg.enviar(sec.chat_yo, a.texto, silencioso=silencio):
+            if tg.enviar(sec.chat_yo, a.texto, silencioso=silencio, botones=boton_sin_stock(a.url)):
                 db.registrar_alerta(a.tipo, a.clave, a.precio, not silencio, "yo", a.texto)
                 stats["sonaron"] += 0 if silencio else 1
         if juntas:

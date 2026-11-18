@@ -32,7 +32,7 @@ def _coincide(categoria: str, nombre: str, modelo: str, datos: dict) -> bool:
 
 def mejor_de_hoy(db: DB, cfg: dict, categoria: str, nombre: str, pais: str, desde: datetime) -> dict | None:
     """La más barata con stock vista desde 'desde' que cumple tus filtros (sin mirar precio_max)."""
-    for r in db.vigentes(pais, categoria, desde):  # ya vienen ordenadas por precio
+    for r in db.vigentes(pais, categoria, desde):  # confirmadas primero, cada grupo por precio
         datos = json.loads(r["datos"] or "{}")
         if not _coincide(categoria, nombre, r["modelo"], datos):
             continue
@@ -51,7 +51,8 @@ def _titulo(categoria: str, nombre: str) -> str:
 
 
 def _tienda(r: dict) -> str:
-    return f'<a href="{escape(r["url"])}">{escape(NOMBRE_TIENDA.get(r["tienda"], r["tienda"]))}</a>'
+    nota = "" if r.get("stock_ok", True) else " (stock sin confirmar)"
+    return f'<a href="{escape(r["url"])}">{escape(NOMBRE_TIENDA.get(r["tienda"], r["tienda"]))}</a>{nota}'
 
 
 def texto(db: DB, cfg: dict, cot: Cotizacion | None, ahora: datetime | None = None) -> str | None:

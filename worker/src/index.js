@@ -2,13 +2,20 @@
 // precios que exporta el bot en cada corrida (rama "datos", precios.json). Las alertas no pasan por
 // acá: siguen saliendo de GitHub Actions.
 //
-// Secretos (wrangler secret put …, nunca en el código): TELEGRAM_TOKEN, TELEGRAM_CHAT_ID_YO y
-// TELEGRAM_WEBHOOK_SECRET. Solo responde a TELEGRAM_CHAT_ID_YO; a cualquier otro, silencio.
-import { preparar, responderBusqueda, pie } from "./buscar.js";
+// Secretos (wrangler secret put …, nunca en el código): TELEGRAM_TOKEN, TELEGRAM_CHAT_ID_YO,
+// TELEGRAM_WEBHOOK_SECRET y WORKER_SYNC_SECRET. Solo responde a TELEGRAM_CHAT_ID_YO; a cualquier
+// otro, silencio.
+//
+// "❌ Sin stock": cada resultado (y cada alerta) trae un botón. Al tocarlo, la clave del link
+// (sha1[:16]) se guarda en KV (OCULTOS, una sola clave "ocultos" = {clave: cuándo}) y deja de
+// aparecer. La corrida siguiente la trae por GET /ocultos (con WORKER_SYNC_SECRET), la oculta en
+// la base y la destapa cuando la tienda la vuelve a mostrar con stock.
+import { buscar, preparar, pie } from "./buscar.js";
 import { escapar } from "./formato.js";
 
 const LIMITE = 4000;
 const CACHE_MS = 60_000;
+const DIAS_MARCA = 60;   // las marcas más viejas se borran del KV (la base ya las tiene)
 let cache = null; // { t, datos }: se reusa entre pedidos mientras viva el isolate
 
 export const AYUDA = [
@@ -17,6 +24,9 @@ export const AYUDA = [
   "/buscar ddr5 32gb au — solo Australia (o <code>ar</code>, solo Argentina)",
   "/buscar ryzen 7 9800x3d · /buscar ssd 2tb gen4 · /buscar pc 5070 ti · /buscar asus 5070 ti",
   "También podés escribir lo que buscás directo, sin /buscar.",
+  "",
+  "Primero aparece lo de stock confirmado; lo que no se pudo confirmar va al final y lo dice.",
+  "Si algo ya no tiene stock, tocá su ❌ y lo oculto hasta que la tienda lo vuelva a tener.",
   "",
   "/estado — cómo andan las tiendas y de cuándo son los precios",
   "/filtros — los filtros y objetivos de config.yaml",
@@ -45,24 +55,51 @@ async function cargar(env) {
   return cache.datos;
 }
 
-export async function responder(texto, cargarDatos, ahora = Date.now()) {
+// ---------------------------------------------------------------- marcas "❌ Sin stock" (KV)
+
+export async function leerMarcas(env) {
+  if (!env.OCULTOS) return {};
+  try {
+    return JSON.parse((await env.OCULTOS.get("ocultos")) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+async function guardarMarca(env, h, ahora = Date.now()) {
+  const marcas = await leerMarcas(env);
+  marcas[h] = new Date(ahora).toISOString();
+  for (const [k, ts] of Object.entries(marcas)) {
+    if (ahora - Date.parse(ts) > DIAS_MARCA * 86400_000) delete marcas[k];
+  }
+  await env.OCULTOS.put("ocultos", JSON.stringify(marcas));
+}
+
+// ---------------------------------------------------------------- respuestas
+
+export async function responder(texto, cargarDatos, ahora = Date.now(), marcas = {}) {
+  return (await responderConBotones(texto, cargarDatos, ahora, marcas)).texto;
+}
+
+/** { texto, botones? }: los botones van solo en /buscar (un ❌ por resultado). */
+export async function responderConBotones(texto, cargarDatos, ahora = Date.now(), marcas = {}) {
   const t = texto.trim();
   const [primera, ...resto] = t.split(/\s+/);
   const cmd = primera.startsWith("/") ? primera.split("@")[0].toLowerCase() : null;
   const arg = cmd ? resto.join(" ") : t;
-  if (cmd === "/start" || cmd === "/ayuda" || cmd === "/help") return AYUDA;
+  if (cmd === "/start" || cmd === "/ayuda" || cmd === "/help") return { texto: AYUDA };
   if (cmd && !["/buscar", "/estado", "/filtros", "/precio"].includes(cmd)) {
-    return `No conozco ${escapar(cmd)}.\n\n${AYUDA}`;
+    return { texto: `No conozco ${escapar(cmd)}.\n\n${AYUDA}` };
   }
   let datos;
   try {
     datos = await cargarDatos();
   } catch {
-    return "⚠️ No pude leer los precios de la última corrida (GitHub no respondió). Probá en un rato.";
+    return { texto: "⚠️ No pude leer los precios de la última corrida (GitHub no respondió). Probá en un rato." };
   }
-  if (cmd === "/estado") return `${pie(datos, ahora)}\n\n${datos.estado}`;
-  if (cmd === "/filtros") return datos.filtros;
-  return responderBusqueda(datos, arg, ahora);
+  if (cmd === "/estado") return { texto: `${pie(datos, ahora)}\n\n${datos.estado}` };
+  if (cmd === "/filtros") return { texto: datos.filtros };
+  return buscar(datos, arg, ahora, marcas);
 }
 
 export function partir(texto) {
@@ -76,24 +113,61 @@ export function partir(texto) {
   return partes.flatMap((p) => (p.length > LIMITE ? p.match(new RegExp(`[\\s\\S]{1,${LIMITE}}`, "g")) : [p]));
 }
 
-async function enviar(env, chatId, texto) {
-  for (const parte of partir(texto)) {
-    // la URL lleva el token: nunca se loguea
-    const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: parte, parse_mode: "HTML", disable_web_page_preview: true }),
+async function api(env, metodo, cuerpo) {
+  // la URL lleva el token: nunca se loguea
+  const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_TOKEN}/${metodo}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(cuerpo),
+  });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    console.log(`Telegram no aceptó ${metodo}:`, r.status, j.description || "");
+  }
+  return r;
+}
+
+async function enviar(env, chatId, texto, botones) {
+  const partes = partir(texto);
+  for (const [i, parte] of partes.entries()) {
+    const cuerpo = { chat_id: chatId, text: parte, parse_mode: "HTML", disable_web_page_preview: true };
+    if (botones?.length && i === partes.length - 1) cuerpo.reply_markup = { inline_keyboard: botones };
+    await api(env, "sendMessage", cuerpo);
+  }
+}
+
+/** Tocaste "❌ Sin stock" (en /buscar o en una alerta): se guarda y el botón pasa a "✅". */
+export async function tocarBoton(env, cq, ahora = Date.now()) {
+  const m = /^x:([0-9a-f]{16})$/.exec(cq.data || "");
+  if (!m || !env.OCULTOS) {
+    await api(env, "answerCallbackQuery", { callback_query_id: cq.id, text: m ? "No pude guardarlo" : "Ya está oculto" });
+    return;
+  }
+  await guardarMarca(env, m[1], ahora);
+  await api(env, "answerCallbackQuery", {
+    callback_query_id: cq.id, text: "Listo: lo oculto hasta que la tienda lo vuelva a mostrar con stock",
+  });
+  const teclado = cq.message?.reply_markup?.inline_keyboard;
+  if (teclado && cq.message?.message_id) {
+    const nuevo = teclado.map((fila) => fila.map((b) => (b.callback_data === cq.data
+      ? { text: b.text.replace("❌", "✅").replace("Sin stock", "oculto"), callback_data: "y" } : b)));
+    await api(env, "editMessageReplyMarkup", {
+      chat_id: cq.message.chat.id, message_id: cq.message.message_id, reply_markup: { inline_keyboard: nuevo },
     });
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
-      console.log("Telegram no aceptó la respuesta:", r.status, j.description || "");
-    }
   }
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/ocultos") {
+      // lo lee la corrida de GitHub (Authorization: Bearer WORKER_SYNC_SECRET)
+      const auth = request.headers.get("Authorization") || "";
+      if (!env.WORKER_SYNC_SECRET || !iguales(auth, `Bearer ${env.WORKER_SYNC_SECRET}`)) {
+        return new Response("", { status: 401 });
+      }
+      return Response.json({ ocultos: await leerMarcas(env) });
+    }
     if (request.method !== "POST" || url.pathname !== "/telegram") return new Response("ok");
     if (!iguales(request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "", env.TELEGRAM_WEBHOOK_SECRET || "")) {
       return new Response("", { status: 401 });
@@ -104,14 +178,28 @@ export default {
     } catch {
       return new Response("");
     }
+    const yo = String(env.TELEGRAM_CHAT_ID_YO || "");
+    const cq = update.callback_query;
+    if (cq) {
+      // solo mis botones, en mi chat; los de cualquier otro: silencio
+      if (yo && String(cq.from?.id ?? "") === yo && String(cq.message?.chat?.id ?? "") === yo) {
+        try {
+          await tocarBoton(env, cq);
+        } catch (e) {
+          console.log("error con el botón:", e.name);
+        }
+      }
+      return new Response("");
+    }
     const msg = update.message;
     const chat = String(msg?.chat?.id ?? "");
     // silencio total para cualquier otro chat (y para lo que no sea texto)
-    if (!msg || typeof msg.text !== "string" || !env.TELEGRAM_CHAT_ID_YO || chat !== String(env.TELEGRAM_CHAT_ID_YO)) {
+    if (!msg || typeof msg.text !== "string" || !yo || chat !== yo) {
       return new Response("");
     }
     try {
-      await enviar(env, chat, await responder(msg.text, () => cargar(env)));
+      const r = await responderConBotones(msg.text, () => cargar(env), Date.now(), await leerMarcas(env));
+      await enviar(env, chat, r.texto, r.botones);
     } catch (e) {
       console.log("error respondiendo:", e.name);
     }

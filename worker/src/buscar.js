@@ -4,6 +4,7 @@ import * as N from "./normalizador.js";
 import { VRAM_POR_DEFECTO } from "./normalizador_gen.js";
 import { cuenta, lineasCuenta } from "./comparar.js";
 import { ars, escapar, hace, horaArgentina, plata, usd } from "./formato.js";
+import { claveUrl } from "./sha1.js";
 
 export const MOSTRAR = 5;
 const BANDERA = { AU: "🇦🇺", AR: "🇦🇷" };
@@ -21,14 +22,18 @@ export function preparar(d) {
   const modelos = d.modelos.map(([nombre, cat, datos], i) => ({
     i, nombre, cat, datos, clave: N.limpiar(nombre), filas: { AR: [], AU: [] },
   }));
-  for (const [mi, pais, precio, ti, url, detalle, haceMin, tipo, staticice] of d.p) {
+  for (const [mi, pais, precio, ti, url, detalle, haceMin, tipo, staticice, iMotivo] of d.p) {
     const m = modelos[mi];
     const busca = `${m.clave} ${N.limpiar(detalle)} ${N.limpiar(d.tiendas[ti])}`;   // para el texto libre y las marcas
-    m.filas[pais].push({ m, pais, precio, tienda: d.tiendas[ti], url, detalle, haceMin, tipo, staticice: Boolean(staticice), busca });
+    // motivo vacío = stock confirmado (JSON viejo, sin motivos: lo de staticICE queda sin confirmar)
+    const motivo = iMotivo == null ? (staticice ? "staticICE no informa stock" : "") : (d.motivos?.[iMotivo] ?? "");
+    m.filas[pais].push({ m, pais, precio, tienda: d.tiendas[ti], url, detalle, haceMin, tipo, ok: !motivo, motivo, busca });
   }
   const chips = new Set(Object.keys(VRAM_POR_DEFECTO));
   for (const m of modelos) if (m.datos.chip) chips.add(m.datos.chip);
-  return { ...d, modelos, chips, generado: Date.parse(d.ts) };
+  // los "❌ Sin stock" que ya incorporó la corrida (clave → cuándo lo tocaste)
+  const procesados = d.ocultos && !Array.isArray(d.ocultos) ? d.ocultos : {};
+  return { ...d, modelos, chips, procesados, generado: Date.parse(d.ts) };
 }
 
 // ---------------------------------------------------------------- entender la búsqueda
@@ -91,7 +96,7 @@ function coincide(q, m) {
 const regexPalabra = (w) => new RegExp(`(?<![A-Z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 const conPalabra = (w, texto) => regexPalabra(w).test(texto);
 
-/** Las publicaciones que coinciden, por país y ordenadas por precio. */
+/** Las publicaciones que coinciden, por país: primero las de stock confirmado, cada grupo por precio. */
 export function filas(datos, q, extra = q.extra) {
   const porPais = { AU: [], AR: [] };
   const palabras = q.cat ? extra : q.texto.split(" ").filter(Boolean);
@@ -105,7 +110,7 @@ export function filas(datos, q, extra = q.extra) {
       }
     }
   }
-  for (const p of PAISES) porPais[p].sort((a, b) => a.precio - b.precio);
+  for (const p of PAISES) porPais[p].sort((a, b) => (b.ok - a.ok) || a.precio - b.precio);
   return porPais;
 }
 
@@ -174,7 +179,7 @@ function linea(f, cot, varios) {
     precio = `<b>${ars(f.precio)}</b>${f.tipo ? " " + f.tipo : ""}` + (cot ? ` ≈ ${usd(f.precio / cot.mep)}` : "");
   }
   const detalle = [varios ? f.m.nombre : null, f.detalle || null, hace(f.haceMin + f.edadDatos),
-    f.staticice ? "staticICE: confirmá stock" : null].filter(Boolean).map(escapar).join(" · ");
+    f.ok ? null : `⚠️ stock sin confirmar (${f.motivo})`].filter(Boolean).map(escapar).join(" · ");
   return `${precio} · ${tienda}\n   ${detalle}`;
 }
 
@@ -218,15 +223,45 @@ export function pie(datos, ahora = Date.now()) {
   return txt;
 }
 
-export function responderBusqueda(datos, texto, ahora = Date.now()) {
+/**
+ * ¿Lo marcaste "❌ Sin stock"? marcas = lo que guardó el Worker (clave → cuándo lo tocaste). Si la
+ * corrida ya lo incorporó (datos.procesados, con la misma fecha), manda la corrida: lo saca del JSON
+ * mientras siga sin stock y lo vuelve a mostrar cuando la tienda lo tiene de nuevo.
+ */
+export function oculto(datos, marcas, h) {
+  if (!marcas[h]) return false;
+  const visto = datos.procesados[h];
+  return !visto || Date.parse(marcas[h]) > Date.parse(visto) + 1000;
+}
+
+/** Las primeras MOSTRAR que no marcaste sin stock (con su clave, para el botón). */
+function primeras(datos, lista, marcas) {
+  const salida = [];
+  for (const f of lista) {
+    f.h ??= claveUrl(f.url);
+    if (oculto(datos, marcas, f.h)) continue;
+    salida.push(f);
+    if (salida.length >= MOSTRAR) break;
+  }
+  return salida;
+}
+
+export function responderBusqueda(datos, texto, ahora = Date.now(), marcas = {}) {
+  return buscar(datos, texto, ahora, marcas).texto;
+}
+
+/** La respuesta a /buscar: { texto, botones } (botones = inline_keyboard con un ❌ por resultado). */
+export function buscar(datos, texto, ahora = Date.now(), marcas = {}) {
   if (!texto.trim()) {
-    return "Decime qué buscás, por ejemplo:\n/buscar 5070 ti\n/buscar ddr5 32gb au\n/buscar ryzen 7 9800x3d ar";
+    return { texto: "Decime qué buscás, por ejemplo:\n/buscar 5070 ti\n/buscar ddr5 32gb au\n/buscar ryzen 7 9800x3d ar" };
   }
   const q = interpretar(texto, datos.chips);
   const porPais = filas(datos, q);
   const edadDatos = Math.max(0, (ahora - datos.generado) / 60000);
   const paises = q.pais ? [q.pais] : PAISES;
-  if (!paises.some((p) => porPais[p].length)) {
+  const top = {};
+  for (const p of paises) top[p] = primeras(datos, porPais[p], marcas).map((f) => ({ ...f, edadDatos }));
+  if (!paises.some((p) => top[p].length)) {
     const s = sugerencia(datos, q);
     const donde = q.pais ? ` en ${BANDERA[q.pais]}` : "";
     let txt = `🔎 No encontré «${escapar(texto.trim())}»${donde} con stock en las tiendas que leo.`;
@@ -239,10 +274,8 @@ export function responderBusqueda(datos, texto, ahora = Date.now()) {
     } else {
       txt += "\nProbá con el chip, el modelo o la capacidad: /buscar 5070 ti · /buscar ddr5 32gb · /buscar ssd 2tb";
     }
-    return txt + "\n\n" + pie(datos, ahora);
+    return { texto: txt + "\n\n" + pie(datos, ahora) };
   }
-  const top = {};
-  for (const p of paises) top[p] = porPais[p].slice(0, MOSTRAR).map((f) => ({ ...f, edadDatos }));
   const varios = new Set(paises.flatMap((p) => top[p].map((f) => f.m.nombre))).size > 1;
   const bloques = [`🔎 <b>${escapar(titulo(q, porPais, texto))}</b>` + (q.pais ? ` en ${BANDERA[q.pais]}` : "")];
   for (const p of paises) {
@@ -251,7 +284,10 @@ export function responderBusqueda(datos, texto, ahora = Date.now()) {
       continue;
     }
     const n = top[p].length;
-    bloques.push(`${BANDERA[p]} <b>${NOMBRE_PAIS[p]}</b> — ${n === 1 ? "el único con stock" : `los ${n} más baratos`}\n` +
+    const mezcla = top[p].some((f) => f.ok) && top[p].some((f) => !f.ok);
+    const cuantos = n === 1 ? (top[p][0].ok ? "el único con stock" : "el único que encontré")
+      : `los ${n} más baratos` + (mezcla ? " (primero los de stock confirmado)" : "");
+    bloques.push(`${BANDERA[p]} <b>${NOMBRE_PAIS[p]}</b> — ${cuantos}\n` +
       top[p].map((f, i) => `${i + 1}. ${linea(f, datos.cot, varios)}`).join("\n"));
   }
   if (!q.pais && top.AU.length && top.AR.length && datos.cot) {
@@ -259,6 +295,8 @@ export function responderBusqueda(datos, texto, ahora = Date.now()) {
     const valija = datos.reglas.valija_aud;
     const c = cuenta(datos.cot, datos.reglas, au.precio, ar.precio, valija);
     let cab = `⚖️ <b>Traerlo de 🇦🇺</b>: el más barato de cada país (${plata(au.precio, "AUD")} contra ${ars(ar.precio)})`;
+    const dudosos = [au, ar].filter((f) => !f.ok).map((f) => `${BANDERA[f.pais]} ${f.tienda}`);
+    if (dudosos.length) cab += `\n   ⚠️ stock sin confirmar: ${escapar(dudosos.join(", "))}`;
     if (au.m.nombre !== ar.m.nombre) cab += `\n   ojo: no es el mismo modelo (${escapar(au.m.nombre)} / ${escapar(ar.m.nombre)})`;
     if (q.cat === "pcs") cab += "\n   (contra la PC armada más barata de 🇦🇷; las alertas además la comparan por partes)";
     bloques.push([cab, ...lineasCuenta(c, "AR", valija, datos.reglas)].join("\n"));
@@ -270,6 +308,9 @@ export function responderBusqueda(datos, texto, ahora = Date.now()) {
       ` (${[precio ? plata(precio, "AUD") : null, votos != null ? `${votos} votos` : null, hace(haceMin + edadDatos)]
         .filter(Boolean).join(" · ")})`).join("\n"));
   }
-  bloques.push(pie(datos, ahora));
-  return bloques.join("\n\n");
+  bloques.push(pie(datos, ahora) + "\n❌ = ya no tiene stock: lo oculto hasta que la tienda lo vuelva a mostrar con stock");
+  // un ❌ por resultado, una fila por país (el número es el de la lista)
+  const botones = paises.filter((p) => top[p].length).map((p) =>
+    top[p].map((f, i) => ({ text: `❌ ${BANDERA[p]} ${i + 1}`, callback_data: `x:${f.h}` })));
+  return { texto: bloques.join("\n\n"), botones };
 }

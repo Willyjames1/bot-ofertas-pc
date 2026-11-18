@@ -18,6 +18,7 @@ import re
 from math import ceil
 
 from ..modelos import Oferta
+from ..stock import estado_schema
 from .base import TIENDAS, Tienda, registrar
 
 log = logging.getLogger("bot.fuentes")
@@ -145,7 +146,7 @@ class HardGamers(Tienda):
                 tienda=tid, pais="AR", moneda="ARS", categoria=categoria,
                 titulo=RE_ESPACIOS.sub(" ", nombre.text()).strip(), url=f"{BASE}/product/{pid}",
                 precio=valor, tipo_precio="contado",
-                stock=False if "OutOfStock" in disp else (True if "InStock" in disp else None),
+                stock=estado_schema(disp),
                 sku=pid, datos={"via": "HardGamers"}))
         m = RE_TOTAL.search(texto)
         return ofertas, maximo, int(m.group(1)) if m else None

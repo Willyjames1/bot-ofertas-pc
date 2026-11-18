@@ -9,6 +9,7 @@ import html
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 from ..modelos import Oferta
+from ..stock import estado_texto
 from .base import Tienda, registrar
 
 API = "https://katech.com.ar/wp-json/wc/store/v1/products"
@@ -61,6 +62,6 @@ class Katech(Tienda):
                 datos["ddr"] = "DDR5"  # la categoría es "memoria-ram-ddr5"
             ofertas.append(self.oferta(
                 categoria=categoria, titulo=html.unescape(p["name"]).strip(), url=p["permalink"], precio=precio,
-                tipo_precio="transferencia", stock=bool(p.get("is_in_stock")), sku=p.get("sku") or str(p["id"]),
+                tipo_precio="transferencia", stock=bool(p.get("is_in_stock")) and estado_texto(disp) is not False, sku=p.get("sku") or str(p["id"]),
                 datos=datos))
         return ofertas

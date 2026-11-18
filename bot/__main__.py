@@ -158,7 +158,7 @@ def cmd_webhook(a):
     secreto = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
     if not secreto or not a.url:
         sys.exit("Falta --url o TELEGRAM_WEBHOOK_SECRET")
-    tg._api("setWebhook", url=a.url, secret_token=secreto, allowed_updates=["message"],
+    tg._api("setWebhook", url=a.url, secret_token=secreto, allowed_updates=["message", "callback_query"],
             drop_pending_updates=True, max_connections=5)
     tg._api("setMyCommands", commands=COMANDOS_MENU)
     info = tg._api("getWebhookInfo")

@@ -223,9 +223,9 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
 ## Búsquedas desde Telegram (Worker de Cloudflare)
 
 - **Cómo llegan los precios**: al final de cada corrida, `exportar.py` escribe `precios.json` y el
-  workflow lo sube a la rama `datos` junto con la base. Tiene solo lo que hay con stock visto en las
-  últimas 48 h (las 8 más baratas de cada modelo y país), las cotizaciones, las reglas de la cuenta,
-  los posts de OzBargain de las últimas 48 h y los textos de `/estado` y `/filtros`. Pesa unos 200 KB.
+  workflow lo sube a la rama `datos` junto con la base. Tiene las 8 más baratas de cada modelo y
+  país (nada sin stock, ver "Stock" abajo), las cotizaciones, las reglas de la cuenta, los posts de
+  OzBargain de las últimas 48 h y los textos de `/estado` y `/filtros`. Pesa unos 220 KB.
 - **El Worker** (`worker/src/index.js`) recibe cada mensaje por webhook, lee ese JSON de
   `raw.githubusercontent.com` (repo público: sin token de GitHub), lo guarda en memoria un minuto y
   responde. Parsear el JSON y buscar lleva 1 a 3 ms de CPU (el plan gratis da 10 ms por pedido).
@@ -240,6 +240,41 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
   alertas sí siguen saliendo de ahí, igual que antes.
 - Probarlo sin Telegram: `cd worker && node scripts/cli.mjs ../datos/precios.json "/buscar 5070 ti"`
   (antes `python -m bot exportar` arma el JSON con la base local). Tests: `npm test` en `worker/`.
+
+## Stock (`bot/stock.py`)
+
+Nada sin stock en `/buscar`, en las alertas ni en el resumen diario. Cada publicación queda en uno
+de tres estados:
+
+- **Afuera**: la tienda dice que no hay (agotado, sin stock, 0 unidades, consultar, preventa, sold
+  out, out of stock, no longer available, discontinued, pre-order, back-order…), **no apareció en
+  la última lectura completa** de su tienda o comparador (tabla `pasadas`, por categoría), la ficha
+  de la tienda real dice que no hay, o lo marcaste "❌ Sin stock".
+- **Sin confirmar** (va al final de la lista y lo dice, con el motivo): viene de staticICE o
+  HardGamers y no se pudo mirar en la tienda real, la tienda no informa stock (Venex) o hace más
+  de `stock.sin_confirmar_horas` (8) que no se pudo leer esa tienda. Las alertas salen igual, con
+  "⚠️ Stock sin confirmar: motivo".
+- **Con stock**: la tienda lo lista con stock en su última lectura, o se verificó en su página.
+
+**Verificación en la tienda real**: lo que viene de un comparador (y lo de tiendas que no informan
+stock) se mira en la página del producto: primero lo que va a avisar, después las 5 más baratas de
+cada modelo y país. Como mucho `stock.verificar_por_corrida` (30) pedidos por corrida y 6 por
+tienda, con pausas y robots.txt. Vale `stock.verificacion_vale_horas` (6 h) o hasta que cambie el
+precio. Solo se leen datos estructurados (Shopify `/products/<handle>.js`, schema.org en JSON-LD o
+microdatos, `product:availability`): nunca palabras sueltas, que en una ficha suelen ser de
+banners o de otros productos. HardGamers: se abre su ficha, se sigue el link a la tienda y se mira
+ahí. Si una tienda frena (403, 429, Cloudflare) o no publica stock en sus páginas, no se le vuelve
+a pedir por 24 h.
+
+| Se puede verificar | No se puede (queda "sin confirmar") |
+|---|---|
+| Mwave (Shopify), PLE, Austin, MegaBuy, LMC; en 🇦🇷 las tiendas de HardGamers con WooCommerce o Tiendanube (Liontech, The Gamer Shop, Maxtecno, Slot One, Shopgamer, Hydra) | Scorptec, PC Case Gear, JW, Computer Alliance y CPL (anti-bots), JB Hi-Fi (429), Officeworks, CCPU y Maco (no publican stock en la ficha) |
+
+**"❌ Sin stock"**: cada resultado de `/buscar` y cada alerta traen el botón. Al tocarlo, el
+Worker guarda la clave del link (`sha1(link)[:16]`) en KV (`OCULTOS`) y deja de mostrarlo. La
+corrida siguiente lo trae (`GET /ocultos` con `WORKER_SYNC_SECRET`), lo oculta en la base y lo
+vuelve a mostrar solo cuando la tienda lo deja de listar (o lo da sin stock) y después lo vuelve a
+listar con stock. Solo valen tus botones (`TELEGRAM_CHAT_ID_YO`).
 
 ## Tiendas conectadas
 

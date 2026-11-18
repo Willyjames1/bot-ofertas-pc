@@ -7,11 +7,12 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import alertas, config, cotizaciones, exportar, feeds, resumen as resumen_diario
+from . import alertas, config, cotizaciones, exportar, feeds, resumen as resumen_diario, stock
 from .alertas import Aviso, Motor
 from .db import DB
 from .fuentes import TIENDAS
@@ -92,12 +93,65 @@ def leer_tienda(tid: str, cats: list[str] | None = None) -> tuple[str, list[Ofer
         tienda.cliente.cerrar()
 
 
+def verificar_stock(db: DB, cfg: dict, aj: dict, avisos: list[Aviso], resumen: dict) -> list[Aviso]:
+    """Mira el stock en la tienda real de lo que viene de staticICE / HardGamers (o de tiendas que
+    no lo informan): primero lo que va a avisar, después lo que aparecería primero en /buscar
+    (las 5 más baratas de cada modelo y país). Saca de los avisos lo que está sin stock."""
+    verif = stock.Verificador(db)
+    try:
+        avisos = alertas.filtrar_por_stock(avisos, db, verif)
+        desde = datetime.now(timezone.utc) - timedelta(hours=exportar.HORAS_OTRO_PAIS)
+        est = db.estado_stock()
+        candidatos = []
+        for pais in ("AU", "AR"):
+            for cat in exportar.CATEGORIAS:
+                puesto: Counter = Counter()
+                for r in sorted(db.vigentes(pais, cat, desde), key=lambda f: f["precio"]):
+                    n = puesto[r["modelo"]]
+                    if n >= 5:
+                        continue
+                    puesto[r["modelo"]] += 1
+                    if est.necesita_verificar(r):
+                        d = json.loads(r["datos"] or "{}")
+                        interesa = alertas.pasa_filtros(cfg, cat, r["modelo"], d, None, r["moneda"],
+                                                        bool(r["tray"]), bool(r["combo"]))
+                        candidatos.append((n, not interesa, r))
+        candidatos.sort(key=lambda x: (x[0], x[1]))
+        urls, precio, por_host = [], {}, Counter()
+        for _, _, r in candidatos:
+            host = stock._host(r["url"])
+            if motivo := verif.bloqueada(host):       # tienda que frena o no publica stock: ni se pide
+                db.guardar_verificacion(r["url"], None, motivo, r["precio"])
+                continue
+            if len(urls) >= aj["verificar_por_corrida"] or por_host[host] >= verif.tope_por_host:
+                continue
+            por_host[host] += 1
+            urls.append(r["url"])
+            precio[r["url"]] = r["precio"]
+        cuenta: Counter = Counter()
+        for u, v in verif.verificar_varios(urls).items():
+            if v.motivo.startswith("sin verificar todavía"):
+                continue
+            db.guardar_verificacion(u, v.disponible, v.motivo, precio[u], v.destino)
+            cuenta[{True: "con_stock", False: "sin_stock", None: "sin_confirmar"}[v.disponible]] += 1
+        resumen["verificados"] = dict(cuenta, pedidos=verif.pedidos)
+        log.info("Stock verificado en la tienda: %s (%d pedidos)", dict(cuenta), verif.pedidos)
+    finally:
+        verif.cerrar()
+    if n := db.actualizar_ocultos():
+        log.info("%d publicaciones que marcaste sin stock volvieron a tener stock", n)
+    db.commit()
+    return avisos
+
+
 def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
            db_ruta=None) -> dict:
     cfg = config.cargar()
     aj = config.ajustes(cfg)
     sec = config.Secretos.desde_entorno()
     db = DB(db_ruta or config.ruta_db())
+    db.horas_stock = aj["stock_sin_confirmar_horas"]
+    db.horas_verif = aj["verificacion_vale_horas"]
     tg = Telegram(sec, dry_run=dry_run)
     inicio = datetime.now(timezone.utc)
     # nombres lindos: los de los adaptadores + los que fue viendo staticICE (PC Case Gear, Scorptec...)
@@ -116,6 +170,13 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
     motor = Motor(cfg, aj, db, cot, inicio)
     avisos: list[Aviso] = []
 
+    # los "❌ Sin stock" que tocaste en Telegram (los guarda el Worker)
+    try:
+        if n := stock.sincronizar_ocultos(db, aj["worker_url"], sec.worker_sync):
+            log.info("%d publicaciones marcadas sin stock desde Telegram", n)
+    except Exception as e:  # noqa: BLE001
+        log.warning("No pude traer del Worker los marcados sin stock: %s", type(e).__name__)
+
     # 2) tiendas
     hacer_tiendas = solo in (None, "tiendas") and (forzar or _minutos_desde(db, "ult_tiendas") >= aj["tiendas_cada_min"] - 3)
     if hacer_tiendas and TIENDAS:
@@ -131,11 +192,13 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
             for fut in as_completed(futuros):
                 tid, ofertas, error, seg = fut.result()
                 validas = 0
+                por_cat: Counter = Counter()
                 for o in ofertas:
                     normalizar(o)
                     if o.descartada:
                         continue
                     validas += 1
+                    por_cat[o.categoria] += 1
                     info = db.guardar_oferta(o)
                     avisos += motor.evaluar_oferta(o, info)
                 ok = error is None or validas > 0
@@ -144,6 +207,11 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
                         if n := db.marcar_sin_stock(seguida, inicio):
                             log.info("%s: %d productos dejaron de aparecer (sin stock)", seguida, n)
                 db.registrar_tienda(tid, error is None, validas, error, seg)
+                if error is None:
+                    # lectura completa: lo de esa tienda (o comparador) que no apareció, ya no está
+                    for cat in cats[tid]:
+                        if por_cat[cat]:
+                            db.registrar_pasada(tid, cat, inicio)
                 resumen["tiendas"][tid] = {"productos": validas, "error": error, "segundos": round(seg)}
                 log.info("%s: %d productos válidos%s (%.0fs)", tid, validas, f", ERROR {error}" if error else "", seg)
                 for cat in cats[tid]:
@@ -214,6 +282,11 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
             resumen_diario.marcar_enviado(db, inicio)
             resumen["resumen_diario"] = True
 
+    try:
+        avisos = verificar_stock(db, cfg, aj, avisos, resumen)
+    except Exception as e:  # noqa: BLE001 — sin verificar, igual se filtra lo que se sabe sin stock
+        log.warning("Falló la verificación de stock: %s", type(e).__name__)
+        avisos = alertas.filtrar_por_stock(avisos, db)
     resumen["alertas"] = alertas.despachar(avisos, tg, db, cfg, aj, sec)
     db.commit()
 

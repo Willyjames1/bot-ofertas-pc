@@ -53,14 +53,14 @@ def _num(x) -> int | None:
 
 
 def _mas_parecido(filas: list[dict], distancia) -> dict | None:
-    """El de menor distancia; a igual distancia, el más barato."""
-    return min(filas, key=lambda r: (distancia(r), r["precio"])) if filas else None
+    """El de menor distancia; a igual distancia, el de stock confirmado y, entre esos, el más barato."""
+    return min(filas, key=lambda r: (distancia(r), not r.get("stock_ok", True), r["precio"])) if filas else None
 
 
 def equivalente(db: DB, categoria: str, modelo: str, datos: dict, pais_otro: str,
                 ahora: datetime | None = None, horas: int = HORAS_OTRO_PAIS) -> Equivalente | None:
     desde = (ahora or datetime.now(timezone.utc)) - timedelta(hours=horas)
-    filas = [dict(r) for r in db.vigentes(pais_otro, categoria, desde)]
+    filas = [dict(r) for r in db.vigentes(pais_otro, categoria, desde, ahora)]
     for r in filas:
         r["_d"] = json.loads(r.get("datos") or "{}")
     if not filas:
@@ -192,7 +192,7 @@ class Partes:
 
 
 def _mas_barata(db: DB, categoria: str, desde: datetime, cumple) -> dict | None:
-    for r in db.vigentes("AR", categoria, desde):   # ordenadas por precio
+    for r in db.vigentes("AR", categoria, desde):   # confirmadas primero, cada grupo por precio
         d = json.loads(r["datos"] or "{}")
         if cumple(r["modelo"], d):
             return dict(r)
@@ -224,7 +224,8 @@ def suma_partes(db: DB, cfg: dict | None, datos: dict, nombres: dict, ahora: dat
             faltan.append(f"{etiqueta} {nombre} (no lo vi en 🇦🇷)")
             continue
         total += r["precio"]
-        detalle.append(f"{escape(nombre)} {ars(r['precio'])} ({escape(nombres.get(r['tienda'], r['tienda']))})")
+        detalle.append(f"{escape(nombre)} {ars(r['precio'])} ({escape(nombres.get(r['tienda'], r['tienda']))}"
+                       f"{sin_confirmar(r)})")
     resto = float(((cfg or {}).get("pcs") or {}).get("resto_estimado_ars") or 0)
     if resto:
         total += resto
@@ -262,6 +263,11 @@ def veredicto(c: Cuenta) -> str:
 ICONO_VEREDICTO = {"conviene": "✅", "casi igual": "🟰", "no conviene": "❌"}
 
 
+def sin_confirmar(fila: dict) -> str:
+    """' · stock sin confirmar' si no se pudo confirmar el stock de esa publicación."""
+    return "" if fila.get("stock_ok", True) else " · stock sin confirmar"
+
+
 def _tienda(fila: dict, nombres: dict) -> str:
     nombre = escape(nombres.get(fila["tienda"], fila["tienda"]))
     return f'<a href="{escape(fila["url"])}">{nombre}</a>'
@@ -291,7 +297,7 @@ def lineas_comparacion(db: DB, cot: Cotizacion | None, pais: str, categoria: str
         lineas.append("   " + " · ".join(partes.detalle))
         if eq:
             lineas.append(f"   (PC armada parecida en 🇦🇷: {_tienda(eq.fila, nombres)} {ars(eq.fila['precio'])}, "
-                          f"{escape(eq.nota)})")
+                          f"{escape(eq.nota)}{sin_confirmar(eq.fila)})")
         c = cuenta(cot, precio, partes.total, valija)
     elif partes:
         lineas.append(f"{BANDERA['AR']} Por partes no se puede comparar: falta " + ", ".join(partes.faltan))
@@ -300,16 +306,16 @@ def lineas_comparacion(db: DB, cot: Cotizacion | None, pais: str, categoria: str
             lineas.append(f"{BANDERA[otro]} Sin precio para comparar en las tiendas que leo")
     elif c is None:
         f = eq.fila
-        staticice = " · staticICE, confirmá stock" if eq.datos.get("via") == "staticICE" else ""
+        stock = sin_confirmar(f)
         if otro == "AR":
             tipo = f" {f['tipo_precio']}" if f.get("tipo_precio") in ("transferencia", "contado") else ""
             lineas.append(f"{BANDERA['AR']} Mejor precio: {_tienda(f, nombres)} {ars(f['precio'])}{tipo} "
-                          f"({escape(eq.nota)})")
+                          f"({escape(eq.nota)}{stock})")
             c = cuenta(cot, precio, f["precio"], valija)
         else:
             u = cot.aud_a_usd(f["precio"])
             lineas.append(f"{BANDERA['AU']} Mejor precio: {_tienda(f, nombres)} {plata(f['precio'], 'AUD')} "
-                          f"≈ {usd(u)} ≈ {ars(cot.usd_a_ars(u))} ({escape(eq.nota)}{staticice})")
+                          f"≈ {usd(u)} ≈ {ars(cot.usd_a_ars(u))} ({escape(eq.nota)}{stock})")
             c = cuenta(cot, f["precio"], precio, valija)
     if c is not None:
         lineas += lineas_cuenta(c, pais, valija)

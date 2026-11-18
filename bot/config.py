@@ -26,6 +26,7 @@ class Secretos:
     token: str
     chat_yo: str
     chat_hermano: str
+    worker_sync: str = ""      # para leer del Worker los "❌ Sin stock" que tocaste
 
     @classmethod
     def desde_entorno(cls) -> "Secretos":
@@ -33,6 +34,7 @@ class Secretos:
             token=os.getenv("TELEGRAM_TOKEN", "").strip(),
             chat_yo=os.getenv("TELEGRAM_CHAT_ID_YO", "").strip(),
             chat_hermano=os.getenv("TELEGRAM_CHAT_ID_HERMANO", "").strip(),
+            worker_sync=os.getenv("WORKER_SYNC_SECRET", "").strip(),
         )
 
     def autorizados(self) -> set[str]:
@@ -87,4 +89,9 @@ def ajustes(cfg: dict, ahora: datetime | None = None) -> dict:
     efectivo.setdefault("sospechoso_vs_mediana_pct", 40)
     efectivo.setdefault("horas_historial_para_minimo", 24)
     efectivo.setdefault("silencio_noche", {"desde": "00:00", "hasta": "08:00"})
+    st = dict(cfg.get("stock") or {})
+    efectivo["stock_sin_confirmar_horas"] = float(st.get("sin_confirmar_horas", 8))
+    efectivo["verificar_por_corrida"] = int(st.get("verificar_por_corrida", 30))
+    efectivo["verificacion_vale_horas"] = float(st.get("verificacion_vale_horas", 6))
+    efectivo["worker_url"] = str(st.get("worker_url") or "").rstrip("/")
     return efectivo

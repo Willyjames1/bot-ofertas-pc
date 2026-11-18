@@ -11,6 +11,7 @@ import re
 
 from .. import config
 from ..modelos import Oferta
+from ..stock import estado_etiqueta
 from .base import Tienda, precio_ar, registrar
 
 RE_PLACA = re.compile(r"(Placa De Video .+?)\s*Cant:", re.I)
@@ -61,6 +62,6 @@ class Mexx(Tienda):
             ofertas.append(self.oferta(
                 categoria=categoria, titulo=a.text(strip=True).rstrip(" -"), url=a.attributes["href"],
                 precio=precio, tipo_precio="transferencia",
-                stock=True if "STOCK" in etiqueta.upper() and "SIN" not in etiqueta.upper() else None,
+                stock=estado_etiqueta(etiqueta),
                 datos={"estado_stock": etiqueta} if etiqueta else {}))
         return ofertas

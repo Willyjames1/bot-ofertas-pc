@@ -2,7 +2,9 @@
 
 Va a la rama "datos" junto con precios.db, al final de cada corrida. Tiene que ser chico: el
 Worker gratis tiene 10 ms de CPU por pedido, y parsear el JSON es lo que más gasta. Por eso:
-  - solo lo que tiene stock (o stock desconocido) visto en las últimas 48 h, sin combos ni sospechosos
+  - nada sin stock: solo lo que apareció en la última pasada de su tienda (o comparador), sin combos
+    ni sospechosos; si la tienda no se pudo leer hace horas, o el stock no se pudo confirmar en la
+    tienda real (staticICE, HardGamers), va igual pero marcado "sin confirmar" (y al final)
   - de cada modelo y país, las POR_MODELO más baratas (el Worker muestra 5)
   - todo en listas, con las tiendas y los modelos en una tabla aparte
 
@@ -26,7 +28,7 @@ from .config import RAIZ
 from .cotizaciones import ARANCEL, FRANQUICIA_USD, Cotizacion
 from .db import DB
 
-VERSION = 1
+VERSION = 2
 POR_MODELO = 8
 HORAS_POSTS = 48
 MAX_POSTS = 40
@@ -60,10 +62,12 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
     modelos: list[list] = []
     i_modelo: dict[tuple[str, str], int] = {}
     filas: list[list] = []
+    motivos: list[str] = [""]          # [0] = stock confirmado; el resto, por qué no se pudo confirmar
+    i_motivo: dict[str, int] = {"": 0}
     for pais in ("AR", "AU"):
         for cat in CATEGORIAS:
             vistos: Counter = Counter()
-            for r in db.vigentes(pais, cat, desde):      # ya vienen ordenadas por precio
+            for r in db.vigentes(pais, cat, desde, ahora):   # sin las que no tienen stock; confirmadas primero
                 if not r["precio"] or vistos[r["modelo"]] >= POR_MODELO:
                     continue
                 vistos[r["modelo"]] += 1
@@ -76,12 +80,17 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
                     i_tienda[r["tienda"]] = len(tiendas)
                     tiendas.append(nombres.get(r["tienda"], r["tienda"]))
                 visto = datetime.fromisoformat(r["ultima_vez"])
+                motivo = "" if r["stock_ok"] else (r["stock_motivo"] or "stock sin confirmar")
+                if motivo not in i_motivo:
+                    i_motivo[motivo] = len(motivos)
+                    motivos.append(motivo)
                 filas.append([
                     i_modelo[clave], pais, round(r["precio"]), i_tienda[r["tienda"]], r["url"],
                     _detalle(cat, r, d),
                     max(0, int((ahora - visto).total_seconds() // 60)),     # hace cuántos minutos se vio
                     r["tipo_precio"] if r["tipo_precio"] in TIPOS_PRECIO else "",
-                    1 if d.get("via") == "staticICE" else 0,                # staticICE no informa stock
+                    1 if d.get("via") == "staticICE" else 0,                # vino de staticICE
+                    i_motivo[motivo],                                       # 0 = stock confirmado
                 ])
     limite = (ahora - timedelta(hours=HORAS_POSTS)).isoformat(timespec="seconds")
     posts = [[p["titulo"], p["url"], p["votos"], p["precio"],
@@ -96,8 +105,13 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
                    "conviene_pct": CONVIENE_PCT},
         "tiendas": tiendas,
         "modelos": modelos,
-        # [modelo, país, precio, tienda, link, detalle, hace_min, tipo_precio, staticICE]
+        # [modelo, país, precio, tienda, link, detalle, hace_min, tipo_precio, staticICE, motivo]
         "p": filas,
+        "motivos": motivos,
+        # los "❌ Sin stock" que ya incorporó la base (clave = sha1(link)[:16] → cuándo lo tocaste). El
+        # Worker oculta lo que tocaste DESPUÉS (todavía no está acá); lo de acá ya lo resuelve la base:
+        # fuera del JSON mientras siga sin stock, de vuelta cuando la tienda lo tiene otra vez
+        "ocultos": {o["h"]: o["ts"] for o in db.c.execute("SELECT h, ts FROM ocultos")},
         # [título, link, votos, precio A$, hace_min]
         "posts": posts,
         "estado": comandos.estado_texto(db),

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { interpretar, preparar, responderBusqueda, MOSTRAR } from "../src/buscar.js";
+import { buscar, interpretar, preparar, responderBusqueda, MOSTRAR } from "../src/buscar.js";
+import { claveUrl } from "../src/sha1.js";
 
 const TS = Date.parse("2026-11-18T15:00:00Z");
 const AHORA = TS + 12 * 60_000;
@@ -68,7 +69,7 @@ test("los dos países: 5 más baratos por país y la cuenta de los avisos", () =
   const au = txt.split("🇦🇺 <b>Australia</b>")[1].split("🇦🇷")[0];
   assert.equal((au.match(/^\d\. /gm) || []).length, MOSTRAR);       // 6 en el JSON, se muestran 5
   assert.match(au, /1\. <b>A\$1\.809<\/b> ≈ USD 1\.212 ≈ \$1\.939\.248 · <a href="https:\/\/m\/1">Mwave Australia<\/a>/);
-  assert.match(au, /staticICE: confirmá stock/);
+  assert.match(au, /⚠️ stock sin confirmar \(staticICE no informa stock\)/);
   assert.match(au, /hace 52 min/);                                   // 40 min antes de exportar + 12 desde entonces
   assert.match(txt, /1\. <b>\$2\.269\.000<\/b> contado ≈ USD 1\.418 · <a href="https:\/\/hg\/1">WIZ TECH<\/a>/);
   assert.match(txt, /⚖️ <b>Traerlo de 🇦🇺<\/b>/);
@@ -106,4 +107,53 @@ test("filtro por marca y sugerencias cuando no hay nada", () => {
 
 test("datos viejos: avisa", () => {
   assert.match(responderBusqueda(datos(), "5070 ti", TS + 3 * 3600_000), /Hace más de 1 h que no hay una corrida nueva/);
+});
+
+// el formato nuevo (v2): motivo por fila (0 = stock confirmado) y los "❌ Sin stock" ya incorporados
+function datosV2(ocultos = {}) {
+  return preparar({
+    v: 2, ts: "2026-11-18T15:00:00+00:00",
+    cot: { mep: 1600, aud_usd: 0.67, nota: null },
+    reglas: { franquicia_usd: 500, arancel: 0.5, valija_aud: 150, conviene_pct: 10 },
+    tiendas: ["Umart", "Mwave Australia", "Scorptec"],
+    modelos: [["RTX 5070 Ti 16GB", "placas", { chip: "RTX 5070 Ti", vram: 16 }]],
+    p: [
+      [0, "AU", 1599, 2, "https://s/1", "Gigabyte", 30, "", 1, 1],
+      [0, "AU", 1699, 1, "https://m/1", "MSI", 30, "", 1, 0],
+      [0, "AU", 1799, 0, "https://u/1", "ASUS", 30, "", 0, 0],
+      [0, "AU", 1749, 1, "https://m/2", "Zotac", 30, "", 1, 2],
+    ],
+    motivos: ["", "la tienda no deja verificar el stock", "no pude leer staticICE hace 9 h"],
+    ocultos, posts: [], estado: "", filtros: "",
+  });
+}
+
+test("stock: primero lo confirmado (por precio) y al final lo sin confirmar, con el motivo", () => {
+  const txt = responderBusqueda(datosV2(), "5070 ti au", AHORA);
+  const orden = [...txt.matchAll(/^\d\. <b>A\$([\d.]+)<\/b>/gm)].map((m) => m[1]);
+  assert.deepEqual(orden, ["1.699", "1.799", "1.599", "1.749"]);
+  assert.match(txt, /los 4 más baratos \(primero los de stock confirmado\)/);
+  assert.match(txt, /Gigabyte · hace 42 min · ⚠️ stock sin confirmar \(la tienda no deja verificar el stock\)/);
+  assert.match(txt, /Zotac · hace 42 min · ⚠️ stock sin confirmar \(no pude leer staticICE hace 9 h\)/);
+  assert.doesNotMatch(txt, /MSI · hace 42 min · ⚠️/);
+});
+
+test("❌ Sin stock: un botón por resultado y lo marcado no aparece hasta que la corrida lo destape", () => {
+  const r = buscar(datosV2(), "5070 ti au", AHORA);
+  assert.deepEqual(r.botones[0].map((b) => b.text), ["❌ 🇦🇺 1", "❌ 🇦🇺 2", "❌ 🇦🇺 3", "❌ 🇦🇺 4"]);
+  assert.equal(r.botones[0][0].callback_data, `x:${claveUrl("https://m/1")}`);
+  assert.ok(r.botones.flat().every((b) => b.callback_data.length <= 64));
+  const h = claveUrl("https://m/1");
+  // lo tocaste después de la corrida: oculto
+  const marcas = { [h]: "2026-11-18T15:05:00.000Z" };
+  const oculto = buscar(datosV2(), "5070 ti au", AHORA, marcas);
+  assert.doesNotMatch(oculto.texto, /https:\/\/m\/1"/);
+  assert.equal(oculto.botones[0].length, 3);
+  // la corrida ya lo incorporó (misma fecha) y lo volvió a mostrar porque la tienda lo tiene de nuevo
+  const destapado = buscar(datosV2({ [h]: "2026-11-18T15:05:00+00:00" }), "5070 ti au", AHORA, marcas);
+  assert.match(destapado.texto, /https:\/\/m\/1"/);
+  // lo volviste a tocar después: oculto otra vez
+  const otraVez = buscar(datosV2({ [h]: "2026-11-18T15:05:00+00:00" }), "5070 ti au", AHORA,
+    { [h]: "2026-11-18T16:00:00.000Z" });
+  assert.doesNotMatch(otraVez.texto, /https:\/\/m\/1"/);
 });

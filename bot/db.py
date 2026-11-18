@@ -33,6 +33,14 @@ CREATE INDEX IF NOT EXISTS ix_alertas_clave ON alertas(clave, ts);
 CREATE TABLE IF NOT EXISTS corridas_tienda(
   ts TEXT, tienda TEXT, ok INTEGER, productos INTEGER, error TEXT, segundos REAL);
 CREATE TABLE IF NOT EXISTS estado(clave TEXT PRIMARY KEY, valor TEXT);
+-- la última lectura completa (sin errores) de cada fuente y categoría: lo que no apareció ahí, ya no está
+CREATE TABLE IF NOT EXISTS pasadas(fuente TEXT, categoria TEXT, ts TEXT, PRIMARY KEY(fuente, categoria));
+-- el stock mirado en la página de la tienda real (para lo que viene de staticICE / HardGamers)
+CREATE TABLE IF NOT EXISTS verificaciones(
+  url TEXT PRIMARY KEY, ts TEXT, disponible INTEGER, motivo TEXT, precio REAL, destino TEXT);
+-- lo que marcaste "❌ Sin stock" en Telegram: oculto hasta que la tienda lo vuelva a mostrar con stock
+CREATE TABLE IF NOT EXISTS ocultos(
+  url TEXT PRIMARY KEY, h TEXT, ts TEXT, visto_sin_stock TEXT, levantado TEXT);
 """
 
 
@@ -184,12 +192,87 @@ class DB:
         return self.c.execute(f"SELECT * FROM cotizaciones WHERE {cual} IS NOT NULL "
                               "ORDER BY ts DESC LIMIT 1").fetchone()
 
-    def vigentes(self, pais: str, categoria: str, desde: datetime) -> list[sqlite3.Row]:
-        """Ofertas con stock (o stock desconocido) vistas desde 'desde', sin sospechosas ni combos."""
-        return self.c.execute(
-            "SELECT * FROM ofertas WHERE pais=? AND categoria=? AND ultima_vez>=? AND modelo IS NOT NULL "
-            "AND sospechoso=0 AND combo=0 AND (stock IS NULL OR stock=1) ORDER BY precio",
-            (pais, categoria, _iso(desde))).fetchall()
+    def vigentes(self, pais: str, categoria: str, desde: datetime, ahora: datetime | None = None) -> list[dict]:
+        """Ofertas vistas desde 'desde' (sin sospechosas ni combos) que NO están sin stock: primero
+        las de stock confirmado y después las "sin confirmar", cada grupo ordenado por precio.
+        Cada fila trae stock_ok (bool) y stock_motivo (por qué no está confirmado)."""
+        estado = self.estado_stock(ahora)
+        filas = []
+        for r in self.c.execute(
+                "SELECT * FROM ofertas WHERE pais=? AND categoria=? AND ultima_vez>=? AND modelo IS NOT NULL "
+                "AND sospechoso=0 AND combo=0 AND (stock IS NULL OR stock=1) ORDER BY precio",
+                (pais, categoria, _iso(desde))):
+            e = estado.de(r)
+            if e.nivel == "no":
+                continue
+            filas.append({**dict(r), "stock_ok": e.confirmado, "stock_motivo": e.motivo})
+        filas.sort(key=lambda f: (not f["stock_ok"], f["precio"]))
+        return filas
+
+    # ------------------------------------------------------------ stock
+
+    def estado_stock(self, ahora: datetime | None = None):
+        """El EstadoStock de ahora (se rehace cuando cambian pasadas, verificaciones u ocultos).
+        Con 'ahora', uno nuevo a esa hora (exportar y comparar usan la hora de la corrida)."""
+        from .stock import EstadoStock
+        if ahora is not None:
+            return EstadoStock(self, ahora, horas_reciente=getattr(self, "horas_stock", 8),
+                               horas_verificacion=getattr(self, "horas_verif", 6))
+        if getattr(self, "_estado", None) is None:
+            self._estado = EstadoStock(self, horas_reciente=getattr(self, "horas_stock", 8),
+                                       horas_verificacion=getattr(self, "horas_verif", 6))
+        return self._estado
+
+    def _cambio_stock(self):
+        self._estado = None
+
+    def registrar_pasada(self, fuente: str, categoria: str, ts: datetime):
+        self.c.execute("INSERT INTO pasadas VALUES(?,?,?) ON CONFLICT(fuente, categoria) DO UPDATE SET ts=excluded.ts",
+                       (fuente, categoria, _iso(ts)))
+        self._cambio_stock()
+
+    def guardar_verificacion(self, url: str, disponible: bool | None, motivo: str, precio: float | None,
+                             destino: str | None = None, ts: datetime | None = None):
+        self.c.execute("INSERT OR REPLACE INTO verificaciones VALUES(?,?,?,?,?,?)",
+                       (url, _iso(ts or datetime.now(timezone.utc)), None if disponible is None else int(disponible),
+                        motivo, precio, destino))
+        self._cambio_stock()
+
+    def ocultar(self, url: str, h: str, ts: datetime) -> bool:
+        """Lo marcaste sin stock en Telegram. Devuelve False si ya estaba (con esa misma marca o una más nueva)."""
+        fila = self.c.execute("SELECT ts, levantado FROM ocultos WHERE url=?", (url,)).fetchone()
+        if fila and fila["ts"] >= _iso(ts):
+            return False
+        self.c.execute("INSERT OR REPLACE INTO ocultos VALUES(?,?,?,NULL,NULL)", (url, h, _iso(ts)))
+        self._cambio_stock()
+        return True
+
+    def ocultos_activos(self) -> list[sqlite3.Row]:
+        return self.c.execute("SELECT * FROM ocultos WHERE levantado IS NULL").fetchall()
+
+    def actualizar_ocultos(self, ahora: datetime | None = None) -> int:
+        """Destapa lo que marcaste sin stock cuando la tienda lo vuelve a mostrar: primero tiene que
+        verse sin stock (o desaparecer) y después volver a aparecer. Devuelve cuántos se destaparon."""
+        ahora = ahora or datetime.now(timezone.utc)
+        estado = self.estado_stock()
+        levantados = 0
+        for o in self.ocultos_activos():
+            fila = self.c.execute("SELECT * FROM ofertas WHERE url=?", (o["url"],)).fetchone()
+            if fila is None:
+                continue
+            e = estado.base(fila)
+            if e.nivel == "no":
+                if not o["visto_sin_stock"]:
+                    self.c.execute("UPDATE ocultos SET visto_sin_stock=? WHERE url=?", (_iso(ahora), o["url"]))
+            elif (o["visto_sin_stock"] and not e.motivo.startswith("no pude leer")
+                  and fila["ultima_vez"] > o["visto_sin_stock"]):
+                self.c.execute("UPDATE ocultos SET levantado=? WHERE url=?", (_iso(ahora), o["url"]))
+                levantados += 1
+        # lo viejo no sirve: verificaciones de más de 3 días y ocultos destapados hace más de 30
+        self.c.execute("DELETE FROM verificaciones WHERE ts<?", (_iso(ahora - timedelta(days=3)),))
+        self.c.execute("DELETE FROM ocultos WHERE levantado<?", (_iso(ahora - timedelta(days=30)),))
+        self._cambio_stock()
+        return levantados
 
     def get(self, clave: str, defecto: str | None = None) -> str | None:
         fila = self.c.execute("SELECT valor FROM estado WHERE clave=?", (clave,)).fetchone()

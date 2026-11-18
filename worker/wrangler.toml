@@ -1,5 +1,5 @@
 # Worker que responde /buscar, /estado, /filtros y /ayuda desde Telegram (plan gratis).
-# Los secretos NO van acá: wrangler secret put TELEGRAM_TOKEN / TELEGRAM_CHAT_ID_YO /
+# Los secretos NO van acá: wrangler secret put TELEGRAM_TOKEN / TELEGRAM_CHAT_ID_YO / WORKER_SYNC_SECRET /
 # TELEGRAM_WEBHOOK_SECRET (ver README, "Búsquedas desde Telegram").
 name = "bot-ofertas"
 main = "src/index.js"
@@ -10,3 +10,8 @@ preview_urls = false   # sin URLs extra por versión: solo la del webhook
 [vars]
 # el JSON que publica cada corrida en la rama "datos" (repo público: no hace falta token)
 DATOS_URL = "https://raw.githubusercontent.com/Willyjames1/bot-ofertas-pc/datos/precios.json"
+
+# los "❌ Sin stock" que tocás en Telegram (una sola clave "ocultos"); la corrida los lee por GET /ocultos
+[[kv_namespaces]]
+binding = "OCULTOS"
+id = "eecf78d9386749628365ec54b67fab99"

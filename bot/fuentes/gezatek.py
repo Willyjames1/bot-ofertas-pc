@@ -7,6 +7,7 @@ from __future__ import annotations
 from urllib.parse import urljoin
 
 from ..modelos import Oferta
+from ..stock import estado_etiqueta
 from .base import Tienda, precio_ar, registrar
 
 
@@ -43,7 +44,7 @@ class Gezatek(Tienda):
                 categoria=categoria, titulo=(d.attributes.get("data-nombre") or a.text()).strip(),
                 url=a.attributes["href"], precio=precio, tipo_precio="transferencia",
                 precio_lista=lista if lista and lista > precio else None,
-                stock=False if "sin stock" in est.lower() else (True if "stock" in est.lower() else None),
+                stock=estado_etiqueta(est),
                 sku=d.attributes.get("data-id"), datos={"estado_stock": est} if est else {}))
         sig = arbol.css_first("a[rel=next]")
         return ofertas, (urljoin(url, sig.attributes["href"]) if sig else None)

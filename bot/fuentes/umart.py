@@ -13,6 +13,7 @@ import httpx
 
 from ..modelos import Oferta
 from ..red import Bloqueado
+from ..stock import estado_schema, estado_texto
 from .base import Tienda, precio_au, registrar
 
 RUTAS = {
@@ -28,7 +29,6 @@ POR_PAGINA = 20
 RE_TOTAL = re.compile(r"([\d,]+)\s*Products", re.I)
 RE_PAGINA = re.compile(r"[?&]page=(\d+)")
 RE_AHORRO = re.compile(r"Save\s*\$\s*([\d,]+(?:\.\d+)?)", re.I)
-SIN_STOCK = ("OutOfStock", "SoldOut", "Discontinued")
 
 
 class PlataformaUmart(Tienda):
@@ -70,7 +70,8 @@ class PlataformaUmart(Tienda):
             disp = disp.attributes.get("href", "") if disp else ""
             stock_txt = li.css_first(".goods_stock")
             stock_txt = stock_txt.text(strip=True) if stock_txt else ""
-            stock = not (any(s in disp for s in SIN_STOCK) or "out of stock" in stock_txt.lower())
+            # lista solo lo publicado: salvo que diga lo contrario (Out of stock, Pre-order, Discontinued…), hay
+            stock = estado_schema(disp) is not False and estado_texto(stock_txt) is not False
             ahorro = li.css_first(".discount")
             m = RE_AHORRO.search(ahorro.text()) if ahorro else None
             lista = round(precio + float(m.group(1).replace(",", "")), 2) if m else None

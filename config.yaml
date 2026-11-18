@@ -125,6 +125,17 @@ frecuencia:
   fase2_cada_horas: 6            # mothers, SSD, fuentes y refrigeración: se leen cada 6 h (todavía no avisan)
   pausa_si_bloquea_horas: 2      # si una tienda nos frena (captcha, 429, 404 falso), descansa 2 h
 
+stock:
+  # si una tienda (o staticICE / HardGamers) no se pudo leer en estas horas, sus productos
+  # aparecen como "stock sin confirmar" y al final de la lista
+  sin_confirmar_horas: 8
+  # lo que viene de staticICE y HardGamers se mira en la página de la tienda real: como mucho
+  # estos pedidos por corrida (y 6 por tienda), con pausas y respetando robots.txt
+  verificar_por_corrida: 30
+  verificacion_vale_horas: 6
+  # el Worker de Telegram: de ahí se traen los "❌ Sin stock" que tocaste
+  worker_url: https://bot-ofertas.williamjames2907.workers.dev
+
 black_friday:
   desde: 2026-11-20
   hasta: 2026-12-02

@@ -146,7 +146,8 @@ class Cliente:
             except httpx.HTTPError as e:
                 ultimo_error = e
                 log.warning("Error de red en %s (intento %d): %s", url, intento, e)
-                time.sleep(5 * intento)
+                if intento < self.reintentos:   # en el último intento no tiene sentido esperar
+                    time.sleep(5 * intento)
                 continue
             cuerpo = r.text[:6000] if r.headers.get("content-type", "").startswith(("text", "application/xhtml")) else ""
             if r.status_code in (403, 405, 503) and any(s in cuerpo for s in SENALES_BLOQUEO):
@@ -156,9 +157,11 @@ class Cliente:
                 raise Bloqueado(f"{host} contesta 429 (demasiados pedidos)")
             if r.status_code == 429 or r.status_code >= 500:
                 espera = int(r.headers.get("retry-after", "0") or 0) or 15 * intento
-                log.warning("HTTP %s en %s, espero %ss", r.status_code, url, espera)
+                if intento < self.reintentos:
+                    log.warning("HTTP %s en %s, espero %ss", r.status_code, url, espera)
                 ultimo_error = httpx.HTTPStatusError(f"HTTP {r.status_code}", request=r.request, response=r)
-                time.sleep(min(espera, 60))
+                if intento < self.reintentos:
+                    time.sleep(min(espera, 60))
                 continue
             r.raise_for_status()
             return r

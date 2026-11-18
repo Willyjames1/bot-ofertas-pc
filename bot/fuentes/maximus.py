@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 
 from ..modelos import Oferta
+from ..stock import estado_schema
 from .base import Tienda, precio_ar, registrar
 
 BASE = "https://www.maximus.com.ar/Productos"
@@ -70,7 +71,7 @@ class Maximus(Tienda):
                 categoria=categoria, titulo=titulo.strip(), url=href, precio=contado,
                 tipo_precio="transferencia",
                 precio_lista=precio_lista if precio_lista and precio_lista > contado else None,
-                stock=False if "OutOfStock" in disp or "SoldOut" in disp else (True if "InStock" in disp else None),
+                stock=estado_schema(disp),
                 sku=m_item.group(1)))
         actual = int(RE_PAGINA.search(url).group(1)) if RE_PAGINA.search(url) else 1
         sig = RE_PAGINA.sub(f"/PAGE={actual + 1}/", url)
