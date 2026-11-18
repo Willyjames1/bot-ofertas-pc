@@ -40,22 +40,23 @@ def test_la_tabla_trae_los_modelos_pedidos():
     ("Disco Solido SSD M.2 Samsung 2TB 990 EVO PLUS 7250MB/s NVMe PCI-E Gen5 2.0",
      ("Samsung 990 Evo Plus", 4, "2280", 7250, 6300)),
     # otra marca: "XPG Mars 980 Pro" no es un Samsung 980 Pro
-    ("Disco Solido SSD M.2 ADATA 2TB XPG MARS 980 PRO AIR 14000MB/s NVMe PCIe Gen5 x4", (None, 5, "2280", 14000, None)),
+    ("Disco Solido SSD M.2 ADATA 2TB XPG MARS 980 PRO AIR 14000MB/s NVMe PCIe Gen5 x4",
+     ("XPG Mars 980 Pro", 5, "2280", 14000, 13000)),
     # la palabra entera: MP44L no es MP44
-    ("Disco Solido SSD M.2 Team 500GB MP44L 5000MB/s NVMe PCI-E x4 Gen4", (None, 4, "2280", 5000, None)),
-    # el título manda sobre la tabla (dice 7000, la tabla 7400: sin escritura)
-    ("Disco Solido SSD M.2 Team 1TB MP44 7000MB/s NVMe PCI-E Gen4 x4", ("Team MP44", 4, "2280", 7000, None)),
+    ("Disco Solido SSD M.2 Team 500GB MP44L 5000MB/s NVMe PCI-E x4 Gen4", ("Team MP44L", 4, "2280", 5000, 2500)),
+    # la lectura del título coincide con la tabla: la escritura sale de la tabla
+    ("Disco Solido SSD M.2 Team 1TB MP44 7000MB/s NVMe PCI-E Gen4 x4", ("Team MP44", 4, "2280", 7000, 6000)),
     # lectura y escritura del título
     ("SP Silicon Power UD90 1TB PCIe Gen4 x4 NVMe M.2 2280 SSD, 5000MB/s Read, 4800MB/s Write",
-     (None, 4, "2280", 5000, 4800)),
+     ("Silicon Power UD90", 4, "2280", 5000, 4800)),
     ("Samsung 990 Pro 2TB 7.450/6.900 MB/s", ("Samsung 990 Pro", 4, "2280", 7450, 6900)),
     # generaciones escritas de mil maneras
     ("Disco Solido SSD 256GB Hiksemi Wave M.2 NVMe PCIe x4 3.0", (None, 3, "2280", None, None)),
-    ("Disco Solido SSD 2TB Patriot P410 M.2 PCIe NVMe 4.0 X4", (None, 4, "2280", None, None)),
+    ("Disco Solido SSD 2TB Acme Rapid M.2 PCIe NVMe 4.0 X4", (None, 4, "2280", None, None)),
     ("SSD Lexar NM790 4TB PCIe Gen 4x4", ("Lexar NM790", 4, "2280", 7400, 6500)),
-    ("Sandisk Optimus GX 7100 500GB SDSP71500GAN-000E0 M.2 2280 NVMe SSD", (None, None, "2280", None, None)),
+    ("Acme Rapid 500GB AR500X M.2 2280 NVMe SSD", (None, None, "2280", None, None)),
     # formatos
-    ("Crucial P310 2TB PCIe 4.0 M.2 NVMe 2230 SSD (CT2000P310SSD2)", ("Crucial P310", 4, "2230", None, None)),
+    ("Crucial P310 2TB PCIe 4.0 M.2 NVMe 2230 SSD (CT2000P310SSD2)", ("Crucial P310", 4, "2230", 7100, 6000)),
     ("WD Blue SA510 SATA SSD M.2 2280 - 250GB", (None, None, "M.2", None, None)),
     ("Kingston A400 960GB 2.5in SATA III SSD", (None, None, "2.5", None, None)),
     ("Samsung T7 Portable SSD 1TB USB 3.2", (None, None, "externo", None, None)),
@@ -80,14 +81,14 @@ def test_estandar_es_m2_2280_nvme_gen4_o_gen5_conocida():
     si = ["Samsung 990 Pro 2TB NVMe", "WD_BLACK SN8100 2TB PCIe Gen5", "Kingston NV3 2TB M.2 2280 NVMe PCIe 4.0"]
     no = ["Crucial MX500 2TB SATA SSD", "Samsung T7 Portable SSD 2TB USB 3.2", "Crucial P310 2TB M.2 2230 NVMe",
           "WD SN740 2TB M.2 2242 NVMe PCIe 4.0", "Hiksemi Wave 2TB M.2 NVMe PCIe 3.0",
-          "Sandisk Optimus GX 7100 2TB M.2 2280 NVMe SSD", "Orico M.2 NVMe SSD Enclosure 2TB"]
+          "Acme Rapid 2TB M.2 2280 NVMe SSD", "Orico M.2 NVMe SSD Enclosure 2TB"]
     assert all(ssd_estandar(d(t)) for t in si)
     assert not any(ssd_estandar(d(t)) for t in no)
 
 
 def test_avisos_solo_lo_estandar():
     for t, pasa in [("Samsung 990 Pro 2TB NVMe", True), ("Crucial P310 2TB M.2 2230 NVMe PCIe 4.0", False),
-                    ("Sandisk Optimus GX 7100 2TB M.2 2280 NVMe SSD", False),   # generación desconocida
+                    ("Acme Rapid 2TB M.2 2280 NVMe SSD", False),   # generación desconocida
                     ("Crucial MX500 2TB SATA SSD", False), ("Samsung T7 Portable SSD 2TB", False),
                     ("Hiksemi Wave 2TB M.2 NVMe PCIe 3.0", False)]:
         o = normalizar(Oferta("x", "AU", "ssd", t, "u", 199, "AUD"))
@@ -148,8 +149,7 @@ def test_exportar_ssd():
     for i in range(20):    # 20 NV3 2TB más baratos: el 990 Pro igual entra (16 por cada modelo, no por "Gen4 2TB")
         _guardar(db, "umart", "AU", f"Kingston NV3 2TB PCIe 4.0 NVMe M.2 2280 v{i}", 150 + i, f"https://u/nv{i}")
     _guardar(db, "umart", "AU", "Samsung 990 Pro 2TB PCIe 4.0 NVMe M.2 2280 (MZ-V9P2T0BW)", 249, "https://u/990")
-    _guardar(db, "umart", "AU", "Sandisk 2TB Optimus GX PRO 850X PCIe 4.0 M.2 2280 NVMe SSD (SDSP81200TAN-000E0)",
-             199, "https://u/sd")
+    _guardar(db, "umart", "AU", "Acme 2TB Rapid X9 PCIe 4.0 M.2 2280 NVMe SSD (ACX9200TAN-000E0)", 199, "https://u/sd")
     db.c.execute("INSERT INTO posts(fuente,id,titulo,url,publicado,visto,votos,precio) VALUES(?,?,?,?,?,?,?,?)",
                  ("ozbargain", "1", "Samsung 990 Pro 2TB $239 @ Amazon AU", "https://oz/1",
                   (AHORA - timedelta(hours=2)).isoformat(), AHORA.isoformat(), 40, 239.0))
@@ -163,4 +163,4 @@ def test_exportar_ssd():
     filas = {f[4]: f for f in x["p"]}
     assert len([u for u in filas if "/nv" in u]) == exportar.POR_MODELO
     assert filas["https://u/990"][5] == "Samsung 990 Pro" and filas["https://u/990"][11] == ["Samsung 990 Pro", 7450, 6900]
-    assert filas["https://u/sd"][5] == "Sandisk 2TB Optimus GX PRO 850X" and filas["https://u/sd"][11] == [None, None, None]
+    assert filas["https://u/sd"][5] == "Acme 2TB Rapid X9" and filas["https://u/sd"][11] == [None, None, None]

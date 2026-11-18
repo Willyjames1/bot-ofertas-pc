@@ -10,8 +10,8 @@
 #   alias      cómo aparece en los títulos, sin la marca. Da igual mayúsculas y espacios
 #              ("990PRO", "990 pro"); tiene que ser la palabra entera ("MP44" no agarra "MP44L")
 #   gen        4 o 5 (3 = PCIe 3.0, 0 = SATA)
-#   velocidad  por capacidad en TB: [lectura, escritura]. Sin "velocidad", o sin esa capacidad,
-#              sale "vel. s/d" (salvo que el título la diga)
+#   velocidad  por capacidad en TB: [lectura, escritura] (escritura null si no está publicada).
+#              Sin "velocidad", o sin esa capacidad, sale "vel. s/d" (salvo que el título la diga)
 #
 # Después de tocarlo: python -m bot generar-worker (el Worker usa la misma tabla) y subirlo.
 
@@ -25,7 +25,7 @@
   marca: WD
   alias: [SN8100]
   gen: 5
-  velocidad: {1: [14900, 11000], 2: [14900, 14000], 4: [14900, 14000], 8: [14900, 14000]}
+  velocidad: {1: [14900, 11000], 2: [14900, 14000], 4: [14900, 14000], 8: [14900, 13200]}
 - nombre: Crucial T705
   marca: Crucial
   alias: [T705]
@@ -67,12 +67,17 @@
   marca: Crucial
   alias: [T500]
   gen: 4
-  velocidad: {0.5: [7200, 5700], 1: [7300, 6800], 2: [7400, 7000], 4: [7400, 7000]}
+  velocidad: {0.5: [7200, 5700], 1: [7300, 6800], 2: [7400, 7000], 4: [7000, 6900]}
 - nombre: Corsair MP600 Pro
   marca: Corsair
   alias: [MP600 PRO LPX, MP600 PRO XT, MP600 PRO]
   gen: 4
-  velocidad: {1: [7100, 5800], 2: [7100, 6800], 4: [7100, 6800]}
+  velocidad: {0.5: [7100, 3700], 1: [7100, 5800], 2: [7100, 6800], 4: [7100, 6800]}
+- nombre: Corsair MP600 Pro NH
+  marca: Corsair
+  alias: [MP600 PRO NH]
+  gen: 4
+  velocidad: {4: [7000, 6500]}
 - nombre: Kingston KC3000
   marca: Kingston
   alias: [KC3000]
@@ -92,27 +97,30 @@
   marca: Lexar
   alias: [NM790]
   gen: 4
-  velocidad: {0.5: [7200, 4400], 1: [7400, 6500], 2: [7400, 6500], 4: [7400, 6500]}
+  velocidad: {0.5: [7200, 4400], 1: [7400, 6500], 2: [7400, 6500], 4: [7400, 6500], 8: [7000, 6200]}
 - nombre: Seagate FireCuda 530
   marca: Seagate
   alias: [FIRECUDA 530]
   gen: 4
-  velocidad: {0.5: [7000, 3000], 1: [7300, 6000], 2: [7300, 6900], 4: [7300, 6900]}
+  velocidad: {0.5: [7000, 3000], 1: [7300, 6000], 2: [7300, 6900], 4: [7250, 6900]}
 - nombre: Solidigm P44 Pro
   marca: Solidigm
   alias: [P44 PRO]
   gen: 4
-  velocidad: {1: [7000, 6500], 2: [7000, 6500]}
+  velocidad: {0.5: [7000, 4700], 1: [7000, 6500], 2: [7000, 6500]}
 - nombre: Team MP44
   marca: TeamGroup
   alias: [MP44]
   gen: 4
-  velocidad: {1: [7400, 6500], 2: [7400, 6900], 4: [7400, 6900]}
+  velocidad: {0.5: [6700, 4400], 1: [7000, 6000], 2: [7000, 6000], 4: [7000, 6000], 8: [7000, 6000]}
 
-# ---------------------------------------------------------------- solo la generación (sin velocidades)
-- {nombre: Kingston Fury Renegade G5, marca: Kingston, alias: [FURY RENEGADE G5, RENEGADE G5], gen: 5}
-- {nombre: Crucial T710, marca: Crucial, alias: [T710], gen: 5}
-- {nombre: Crucial P510, marca: Crucial, alias: [P510], gen: 5}
+# ---------------------------------------------------------------- más modelos
+- {nombre: Kingston Fury Renegade G5, marca: Kingston, alias: [FURY RENEGADE G5, RENEGADE G5], gen: 5,
+   velocidad: {1: [14200, 11000], 2: [14700, 14000], 4: [14800, 14000], 8: [14800, 14000]}}
+- {nombre: Crucial T710, marca: Crucial, alias: [T710], gen: 5,
+   velocidad: {1: [14900, 13700], 2: [14500, 13800], 4: [14500, 13800]}}
+- {nombre: Crucial P510, marca: Crucial, alias: [P510], gen: 5,
+   velocidad: {1: [11000, 9500], 2: [10000, 8700]}}
 - {nombre: Corsair MP700, marca: Corsair, alias: [MP700], gen: 5}
 - {nombre: Seagate FireCuda 540, marca: Seagate, alias: [FIRECUDA 540], gen: 5}
 - {nombre: Samsung 990 Evo, marca: Samsung, alias: [990 EVO], gen: 4}
@@ -120,14 +128,76 @@
 - {nombre: WD SN770, marca: WD, alias: [SN770], gen: 4}
 - {nombre: WD SN5000, marca: WD, alias: [SN5000], gen: 4}
 - {nombre: WD SN580, marca: WD, alias: [SN580], gen: 4}
-- {nombre: Crucial P310, marca: Crucial, alias: [P310], gen: 4}
-- {nombre: Crucial P3 Plus, marca: Crucial, alias: [P3 PLUS], gen: 4}
+- {nombre: Crucial P310, marca: Crucial, alias: [P310], gen: 4,
+   velocidad: {0.5: [6600, 3500], 1: [7100, 6000], 2: [7100, 6000], 4: [7100, 6000]}}
+- {nombre: Crucial P3 Plus, marca: Crucial, alias: [P3 PLUS], gen: 4,
+   velocidad: {0.5: [4700, 1900], 1: [5000, 3600], 2: [5000, 4200], 4: [4800, 4100]}}
 - {nombre: Crucial P5 Plus, marca: Crucial, alias: [P5 PLUS], gen: 4}
 - {nombre: Kingston NV2, marca: Kingston, alias: [NV2], gen: 4}
 - {nombre: Corsair MP600, marca: Corsair, alias: [MP600], gen: 4}
 - {nombre: ADATA Legend 960, marca: ADATA, alias: [LEGEND 960], gen: 4}
-- {nombre: ADATA Legend 900 Pro, marca: ADATA, alias: [LEGEND 900 PRO], gen: 4}
-- {nombre: ADATA Legend 900, marca: ADATA, alias: [LEGEND 900], gen: 4}
+- {nombre: ADATA Legend 900 Pro, marca: ADATA, alias: [LEGEND 900 PRO], gen: 4,
+   velocidad: {1: [7400, 6000], 2: [7400, 6500], 4: [7400, 6500]}}
+- {nombre: ADATA Legend 900, marca: ADATA, alias: [LEGEND 900], gen: 4,
+   velocidad: {0.5: [6200, 2300], 1: [7000, 4700], 2: [7000, 5400]}}
 - {nombre: ADATA SX8200, marca: ADATA, alias: [SX8200], gen: 3}
 - {nombre: Samsung 870 Evo, marca: Samsung, alias: [870 EVO], gen: 0}
 - {nombre: Crucial MX500, marca: Crucial, alias: [MX500], gen: 0}
+
+# ---------------------------------------------------------------- los que aparecen en las tiendas
+# (velocidades de las fichas de cada fabricante, noviembre 2026. KLEVV: su página no respondía, sale
+# de la copia indexada; S70 Blade salvo 2TB: ficha vieja de XPG. WD Green SN3000: la escritura solo
+# está publicada para la versión QLC, va la lectura sola. MSI: la SPATIUM M452 (Phison E29T), no la
+# M452 a secas (E19T). Gigabyte: G440E1TB, no la G440E1024G, que es más rápida)
+- {nombre: Samsung 990, marca: Samsung, alias: ["990"], gen: 4,
+   velocidad: {1: [7150, 6450], 2: [7250, 6450]}}
+- {nombre: WD Blue SN5100, marca: WD, alias: [SN5100], gen: 4,
+   velocidad: {0.5: [6600, 5600], 1: [7100, 6700], 2: [7100, 6700], 4: [6900, 6700]}}
+- {nombre: WD Green SN3000, marca: WD, alias: [SN3000], gen: 4,
+   velocidad: {0.5: [5000, null], 1: [5000, null], 2: [5000, null]}}
+- {nombre: Crucial E100, marca: Crucial, alias: [E100], gen: 4,
+   velocidad: {0.5: [4700, 2500], 1: [5000, 4500], 2: [5000, 4500]}}
+- {nombre: ADATA Legend 860, marca: ADATA, alias: [LEGEND 860], gen: 4,
+   velocidad: {0.5: [5000, 3000], 1: [6000, 4000], 2: [6000, 5000]}}
+- {nombre: XPG Mars 970 Plus, marca: ADATA, alias: [MARS 970 PLUS], gen: 5,
+   velocidad: {1: [10500, 9500], 2: [11000, 10000]}}
+- {nombre: XPG Mars 980 Blade, marca: ADATA, alias: [MARS 980 BLADE], gen: 5,
+   velocidad: {1: [14000, 10000], 2: [14000, 13000], 4: [14000, 13000], 8: [12000, 12000]}}
+- {nombre: XPG Mars 980 Pro, marca: ADATA, alias: [MARS 980 PRO AIR, MARS 980 PRO], gen: 5,
+   velocidad: {1: [14000, 10000], 2: [14000, 13000], 4: [14000, 13000], 8: [12000, 12000]}}
+- {nombre: XPG Gammix S70 Blade, marca: ADATA, alias: [GAMMIX S70 BLADE, S70 BLADE], gen: 4,
+   velocidad: {0.5: [7200, 2600], 1: [7400, 5500], 2: [7400, 6800], 4: [7400, 6600], 8: [7300, 6300]}}
+- {nombre: Sandisk Optimus 5100, marca: Sandisk, alias: [OPTIMUS 5100], gen: 4,
+   velocidad: {0.5: [6600, 5600], 1: [7100, 6700], 2: [7100, 6700], 4: [6900, 6700]}}
+- {nombre: Sandisk Optimus GX 7100, marca: Sandisk, alias: [OPTIMUS GX 7100], gen: 4,
+   velocidad: {0.5: [6800, 5800], 1: [7250, 6900], 2: [7250, 6900], 4: [7000, 6700]}}
+- {nombre: Sandisk Optimus GX Pro 850X, marca: Sandisk, alias: [OPTIMUS GX PRO 850X], gen: 4,
+   velocidad: {1: [7300, 6300], 2: [7300, 6600], 4: [7300, 6600], 8: [7200, 6600]}}
+- {nombre: Sandisk Optimus GX Pro 8100, marca: Sandisk, alias: [OPTIMUS GX PRO 8100], gen: 5,
+   velocidad: {1: [14900, 11000], 2: [14900, 14000], 4: [14900, 14000], 8: [14900, 13200]}}
+- {nombre: Team MP44L, marca: TeamGroup, alias: [MP44L], gen: 4,
+   velocidad: {0.25: [4650, 1900], 0.5: [5000, 2500], 1: [5000, 4500], 2: [4800, 4400]}}
+- {nombre: Team MP44Q, marca: TeamGroup, alias: [MP44Q], gen: 4,
+   velocidad: {1: [7000, 5900], 2: [7000, 5900], 4: [7000, 5900], 8: [7000, 5900]}}
+- {nombre: Team NV5000, marca: TeamGroup, alias: [NV5000], gen: 4,
+   velocidad: {0.5: [4500, 1800], 1: [4500, 1900], 2: [5000, 3000]}}
+- {nombre: Patriot VP4300 Lite, marca: Patriot, alias: [VP4300 LITE], gen: 4,
+   velocidad: {0.5: [7000, 4000], 1: [7400, 6400], 2: [7400, 6400], 4: [7400, 6000]}}
+- {nombre: Patriot P410, marca: Patriot, alias: [P410], gen: 4,
+   velocidad: {0.5: [5000, 2300], 1: [5000, 4500], 2: [5000, 4500], 4: [5000, 4500]}}
+- {nombre: Silicon Power UD85, marca: Silicon Power, alias: [UD85], gen: 4,
+   velocidad: {0.25: [3300, 1300], 0.5: [3600, 2400], 1: [3600, 2800], 2: [3600, 2800], 4: [3600, 2800]}}
+- {nombre: Silicon Power UD90, marca: Silicon Power, alias: [UD90], gen: 4,
+   velocidad: {0.25: [4700, 1500], 0.5: [5000, 2700], 1: [5000, 4800], 2: [5000, 4800], 4: [5000, 4500]}}
+- {nombre: Gigabyte 4000E, marca: Gigabyte, alias: [4000E, G440E500G, G440E1TB, G440E2TB], gen: 4,
+   velocidad: {0.25: [3500, 1800], 0.5: [3600, 3000], 1: [4000, 3900]}}
+- {nombre: PNY CS2241, marca: PNY, alias: [CS2241], gen: 4,
+   velocidad: {0.5: [4700, 1700], 1: [5100, 3200], 2: [5000, 4200], 4: [5000, 4200]}}
+- {nombre: MSI Spatium M452, marca: MSI, alias: [SPATIUM M452, M452], gen: 4,
+   velocidad: {0.5: [3600, 3100], 1: [3600, 3100]}}
+- {nombre: Hiksemi Future Lite, marca: Hiksemi, alias: [FUTURE LITE], gen: 4,
+   velocidad: {0.5: [6320, 3111], 1: [7000, 6000], 2: [7100, 6350], 4: [7300, 6200]}}
+- {nombre: Hiksemi Future X Lite, marca: Hiksemi, alias: [FUTURE X LITE], gen: 4,
+   velocidad: {1: [7000, 6000], 2: [7100, 6350], 4: [7300, 6200]}}
+- {nombre: KLEVV Cras C910G, marca: KLEVV, alias: [CRAS C910G, C910G], gen: 4,
+   velocidad: {0.5: [5000, 3700], 1: [5000, 4800], 2: [5200, 4800], 4: [5200, 4800]}}

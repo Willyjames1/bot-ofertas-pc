@@ -407,7 +407,8 @@ export function buscar(datos, texto, ahora = Date.now(), marcas = {}, q0 = null)
     const au = top.AU[0], ar = top.AR[0];
     const valija = datos.reglas.valija_aud;
     const c = cuenta(datos.cot, datos.reglas, au.precio, ar.precio, valija);
-    let cab = `⚖️ <b>Traerlo de 🇦🇺</b>: el más barato de cada país (${plata(au.precio, "AUD")} contra ${ars(ar.precio)})`;
+    const elPrimero = q.cat === "ssd" && q.f.vel ? "el más rápido" : "el más barato";
+    let cab = `⚖️ <b>Traerlo de 🇦🇺</b>: ${elPrimero} de cada país (${plata(au.precio, "AUD")} contra ${ars(ar.precio)})`;
     const dudosos = [au, ar].filter((f) => !f.ok).map((f) => `${BANDERA[f.pais]} ${f.tienda}`);
     if (dudosos.length) cab += `\n   ⚠️ stock sin confirmar: ${escapar(dudosos.join(", "))}`;
     const cual = (f) => (f.m.cat === "ssd" ? `${f.linea || f.detalle} ${capacidad(f.m.datos.capacidad_tb)}` : f.m.nombre);

@@ -418,7 +418,8 @@ MARCAS_SSD = [("SAMSUNG", "Samsung"), ("WD_BLACK", "WD"), ("WD ", "WD"), ("WESTE
               ("HIKSEMI", "Hiksemi"), ("PNY", "PNY"), ("SABRENT", "Sabrent"), ("MSI", "MSI"),
               ("GIGABYTE", "Gigabyte"), ("PATRIOT", "Patriot"), ("SANDISK", "Sandisk"),
               ("SILICON POWER", "Silicon Power"), ("KINGBANK", "Kingbank"), ("TRANSCEND", "Transcend"),
-              ("NETAC", "Netac"), ("SK HYNIX", "SK hynix"), ("HIKVISION", "Hikvision")]
+              ("NETAC", "Netac"), ("SK HYNIX", "SK hynix"), ("HIKVISION", "Hikvision"),
+              ("KLEVV", "KLEVV")]
 
 
 def _cargar_ssd_modelos() -> list[list]:
@@ -427,7 +428,7 @@ def _cargar_ssd_modelos() -> list[list]:
     ruta = Path(__file__).resolve().parent.parent / "ssd_modelos.yaml"
     modelos, alias = [], {}
     for m in yaml.safe_load(ruta.read_text(encoding="utf-8")) or []:
-        vel = sorted([float(tb) if float(tb) != int(tb) else int(tb), int(v[0]), int(v[1])]
+        vel = sorted([float(tb) if float(tb) != int(tb) else int(tb), int(v[0]), None if v[1] is None else int(v[1])]
                      for tb, v in (m.get("velocidad") or {}).items())
         for a in m["alias"]:
             alias[limpiar(str(a))] = len(modelos)
