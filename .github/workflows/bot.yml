@@ -71,10 +71,12 @@ jobs:
           # armado sin tocar la rama main y empujado con las credenciales que ya dejó actions/checkout.
           BLOB=$(git hash-object -w datos/precios.db)
           ARBOL=$(printf '100644 blob %s\tprecios.db\n' "$BLOB")
-          if [ -f datos/precios.json ]; then
-            JSON=$(git hash-object -w datos/precios.json)
-            ARBOL="$ARBOL"$'\n'$(printf '100644 blob %s\tprecios.json' "$JSON")
-          fi
+          # precios.json y los chicos que lee el Worker (precios-indice.json, precios-placas.json…)
+          for f in datos/precios*.json; do
+            [ -f "$f" ] || continue
+            JSON=$(git hash-object -w "$f")
+            ARBOL="$ARBOL"$'\n'$(printf '100644 blob %s\t%s' "$JSON" "$(basename "$f")")
+          done
           TREE=$(printf '%s\n' "$ARBOL" | git mktree)
           COMMIT=$(git -c user.name="bot-ofertas" -c user.email="bot-ofertas@users.noreply.github.com" \
                    commit-tree "$TREE" -m "datos $(date -u +%FT%TZ)")

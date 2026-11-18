@@ -119,6 +119,31 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
     }
 
 
+def por_categoria(datos: dict) -> dict[str, dict]:
+    """Además del JSON completo, uno chico por categoría (lo que lee el Worker para cada búsqueda:
+    leer 300 KB enteros en cada pedido se pasaba de los 10 ms de CPU del plan gratis) y un índice
+    sin precios (chips, /estado y /filtros). Cada uno tiene el mismo formato que el completo."""
+    chips = sorted({m[2]["chip"] for m in datos["modelos"] if m[2].get("chip")})
+    salida = {"indice": {**datos, "modelos": [], "p": [], "chips": chips}}
+    for cat in CATEGORIAS:
+        nuevo: dict[int, int] = {}
+        modelos = []
+        for i, m in enumerate(datos["modelos"]):
+            if m[1] == cat:
+                nuevo[i] = len(modelos)
+                modelos.append(m)
+        filas = [[nuevo[f[0]], *f[1:]] for f in datos["p"] if f[0] in nuevo]
+        salida[cat] = {**datos, "modelos": modelos, "p": filas, "chips": chips}
+    return salida
+
+
+def guardar_todo(datos: dict, ruta: Path) -> int:
+    """precios.json y, al lado, precios-indice.json y precios-<categoría>.json. Devuelve los bytes del completo."""
+    for nombre, parte in por_categoria(datos).items():
+        guardar(parte, ruta.with_name(f"{ruta.stem}-{nombre}{ruta.suffix}"))
+    return guardar(datos, ruta)
+
+
 def guardar(datos: dict, ruta: Path) -> int:
     """Escribe el JSON compacto (sin espacios) de forma atómica. Devuelve los bytes."""
     ruta.parent.mkdir(parents=True, exist_ok=True)

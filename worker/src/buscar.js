@@ -26,12 +26,12 @@ export function preparar(d) {
   }));
   for (const [mi, pais, precio, ti, url, detalle, haceMin, tipo, staticice, iMotivo] of d.p) {
     const m = modelos[mi];
-    const busca = `${m.clave} ${N.limpiar(detalle)} ${N.limpiar(d.tiendas[ti])}`;   // para el texto libre y las marcas
     // motivo vacío = stock confirmado (JSON viejo, sin motivos: lo de staticICE queda sin confirmar)
     const motivo = iMotivo == null ? (staticice ? "staticICE no informa stock" : "") : (d.motivos?.[iMotivo] ?? "");
-    m.filas[pais].push({ m, pais, precio, tienda: d.tiendas[ti], url, detalle, haceMin, tipo, ok: !motivo, motivo, busca });
+    m.filas[pais].push({ m, pais, precio, tienda: d.tiendas[ti], url, detalle, haceMin, tipo, ok: !motivo, motivo, busca: null });
   }
-  const chips = new Set(Object.keys(VRAM_POR_DEFECTO));
+  // los chips de TODAS las categorías (los archivos por categoría los traen en "chips")
+  const chips = new Set([...Object.keys(VRAM_POR_DEFECTO), ...(d.chips || [])]);
   for (const m of modelos) if (m.datos.chip) chips.add(m.datos.chip);
   // los "❌ Sin stock" que ya incorporó la corrida (clave → cuándo lo tocaste)
   const procesados = d.ocultos && !Array.isArray(d.ocultos) ? d.ocultos : {};
@@ -43,8 +43,8 @@ export function preparar(d) {
 // "r10", "R16": cuántos resultados por país. "r7 9800x3d", "r5 7600" o "r7 7700x" son Ryzen, no una
 // cantidad: r3/r5/r7/r9 seguido de un número con sufijo de Ryzen (X, X3D, G, F) o que no es de una placa
 // ("r3 5070 ti" = 3 resultados de la 5070 Ti; "r7 7700" a secas, por la RX 7700 XT, también).
-const RE_CANTIDAD = /(?<![\p{L}\p{N}])r(\d{1,4})(?![\p{L}\p{N}])/giu;
-const RE_RYZEN_MODELO = /^\s+(\d{4})(X3D|XT|X|GE|G|F)?(?![\p{L}\p{N}])/iu;
+const RE_CANTIDAD = /(?<![A-Za-z0-9ÁÉÍÓÚÑáéíóúñ])r(\d{1,4})(?![A-Za-z0-9ÁÉÍÓÚÑáéíóúñ])/gi;
+const RE_RYZEN_MODELO = /^\s+(\d{4})(X3D|XT|X|GE|G|F)?(?![A-Za-z0-9])/i;
 
 /** Saca la cantidad del texto: { resto, pedida, cantidad, tope } (tope = pediste más del máximo). */
 export function cantidadPedida(texto, chips = new Set()) {
@@ -120,6 +120,12 @@ function coincide(q, m) {
 const regexPalabra = (w) => new RegExp(`(?<![A-Z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 const conPalabra = (w, texto) => regexPalabra(w).test(texto);
 
+const tiendasLimpias = new Map();
+const limpiarTienda = (t) => {
+  if (!tiendasLimpias.has(t)) tiendasLimpias.set(t, N.limpiar(t));
+  return tiendasLimpias.get(t);
+};
+
 /** Las publicaciones que coinciden, por país: primero las de stock confirmado, cada grupo por precio. */
 export function filas(datos, q, extra = q.extra) {
   const porPais = { AU: [], AR: [] };
@@ -129,7 +135,12 @@ export function filas(datos, q, extra = q.extra) {
     if (q.cat && !coincide(q, m)) continue;
     for (const p of PAISES) {
       for (const f of m.filas[p]) {
-        if (filtros.length && !filtros.every((r) => r.test(f.busca))) continue;
+        // el texto para las marcas y el texto libre se arma solo cuando hace falta (limpiar
+        // las ~2.000 filas de entrada se comía buena parte de los 10 ms de CPU del plan gratis)
+        if (filtros.length) {
+          f.busca ??= `${m.clave} ${N.limpiar(f.detalle)} ${limpiarTienda(f.tienda)}`;
+          if (!filtros.every((r) => r.test(f.busca))) continue;
+        }
         porPais[p].push(f);
       }
     }

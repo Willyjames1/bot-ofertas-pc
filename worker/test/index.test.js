@@ -169,3 +169,20 @@ test("mensajes largos: se parten sin cortar un producto y sin pasar los 4.096", 
   // lo que entra en uno, igual que antes
   assert.deepEqual(partir("a\n\nb"), ["a\n\nb"]);
 });
+
+test("lee solo el índice y la categoría de la búsqueda, no el JSON completo", async () => {
+  const sub = (cat) => ({ ...DATOS, modelos: cat === "placas" ? DATOS.modelos : [], p: cat === "placas" ? DATOS.p : [],
+    chips: ["RTX 5070 Ti"] });
+  globalThis.fetch = async (url, opciones = {}) => {
+    pedidos.push({ url: String(url), cuerpo: opciones.body ? JSON.parse(opciones.body) : null });
+    const m = /precios-(\w+)\.json$/.exec(String(url));
+    if (m) return new Response(JSON.stringify(m[1] === "indice" ? { ...sub(null), modelos: [], p: [] } : sub(m[1])));
+    if (String(url) === ENV.DATOS_URL) return new Response(JSON.stringify(DATOS));
+    return new Response(JSON.stringify({ ok: true }));
+  };
+  const env = { ...ENV, DATOS_URL: "https://raw.example/otra/precios.json" };   // (otra URL: sin la caché de los otros tests)
+  await worker.fetch(mensaje("/buscar 5070 ti r3"), env);
+  const leidos = pedidos.map((p) => p.url).filter((u) => u.startsWith("https://raw.example/"));
+  assert.deepEqual(leidos, ["https://raw.example/otra/precios-indice.json", "https://raw.example/otra/precios-placas.json"]);
+  assert.match(aTelegram()[0].cuerpo.text, /RTX 5070 Ti 16GB/);
+});

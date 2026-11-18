@@ -123,7 +123,7 @@ def cmd_exportar(a):
     cot = Cotizacion(mep["mep"], aud["aud_usd"], datetime.now(timezone.utc)) if mep and aud else None
     datos = exportar.armar(db, config.cargar(), cot, alertas.NOMBRE_TIENDA)
     ruta = Path(a.salida) if a.salida else exportar.ruta_json()
-    kb = exportar.guardar(datos, ruta) / 1024
+    kb = exportar.guardar_todo(datos, ruta) / 1024
     print(f"{ruta}: {kb:.0f} KB, {len(datos['p'])} precios de {len(datos['modelos'])} modelos, "
           f"{len(datos['posts'])} posts")
 

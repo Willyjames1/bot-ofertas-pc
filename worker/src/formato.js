@@ -30,11 +30,13 @@ export function hace(min) {
   return `hace ${Math.floor(min / 1440)} días`;
 }
 
-const HORA_AR = new Intl.DateTimeFormat("es-AR", {
-  timeZone: "America/Argentina/Salta", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
-});
+// Argentina está en UTC−3 fijo (sin horario de verano desde 2009). Con cuentas y no con
+// Intl.DateTimeFormat: armarlo con zona horaria carga la tabla de zonas y costaba ~13 ms de CPU
+// en el primer pedido (el plan gratis da 10).
+const OFFSET_AR_MS = -3 * 3600_000;
+const dos = (n) => String(n).padStart(2, "0");
 
 export function horaArgentina(fecha) {
-  const p = Object.fromEntries(HORA_AR.formatToParts(fecha).map((x) => [x.type, x.value]));
-  return `${p.day}/${p.month} ${p.hour}:${p.minute}`;
+  const d = new Date(fecha.getTime() + OFFSET_AR_MS);
+  return `${dos(d.getUTCDate())}/${dos(d.getUTCMonth() + 1)} ${dos(d.getUTCHours())}:${dos(d.getUTCMinutes())}`;
 }

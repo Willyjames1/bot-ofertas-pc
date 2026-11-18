@@ -293,7 +293,7 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
     # 6) los precios actuales para /buscar (el Worker los lee de la rama datos)
     try:
         ruta = exportar.ruta_json() if db_ruta is None else Path(db_ruta).with_name("precios.json")
-        resumen["exportado_kb"] = round(exportar.guardar(
+        resumen["exportado_kb"] = round(exportar.guardar_todo(
             exportar.armar(db, cfg, cot, alertas.NOMBRE_TIENDA, datetime.now(timezone.utc)), ruta) / 1024)
     except Exception as e:  # noqa: BLE001 — que no frene la corrida: las alertas ya salieron
         log.warning("No pude exportar los precios para /buscar: %s", type(e).__name__)

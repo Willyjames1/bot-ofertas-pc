@@ -10,13 +10,13 @@
 // (sha1[:16]) se guarda en KV (OCULTOS, una sola clave "ocultos" = {clave: cuándo}) y deja de
 // aparecer. La corrida siguiente la trae por GET /ocultos (con WORKER_SYNC_SECRET), la oculta en
 // la base y la destapa cuando la tienda la vuelve a mostrar con stock.
-import { buscar, preparar, pie } from "./buscar.js";
+import { buscar, interpretar, preparar, pie } from "./buscar.js";
 import { escapar } from "./formato.js";
 
 const LIMITE = 4000;
 const CACHE_MS = 60_000;
 const DIAS_MARCA = 60;   // las marcas más viejas se borran del KV (la base ya las tiene)
-let cache = null; // { t, datos }: se reusa entre pedidos mientras viva el isolate
+const cache = new Map(); // archivo → { t, datos }: se reusa entre pedidos mientras viva el isolate
 
 export const AYUDA = [
   "🔎 <b>Buscar precios</b> (responde al toque con lo que vio la última corrida)",
@@ -44,17 +44,29 @@ export function iguales(a, b) {
   return dif === 0 && x.length > 0;
 }
 
-async function cargar(env) {
-  if (cache && Date.now() - cache.t < CACHE_MS) return cache.datos;
+/**
+ * Los precios: "indice" (sin precios: chips, /estado, /filtros), una categoría ("placas", "ram"…)
+ * o null = el completo. Leer y preparar el JSON entero (300 KB) en cada isolate nuevo se pasaba de
+ * los 10 ms de CPU del plan gratis; una categoría pesa de 40 a 140 KB.
+ */
+async function cargar(env, parte = null) {
+  const url = parte ? env.DATOS_URL.replace(/\.json$/, `-${parte}.json`) : env.DATOS_URL;
+  const hay = cache.get(url);
+  if (hay && Date.now() - hay.t < CACHE_MS) return hay.datos;
   try {
-    const r = await fetch(env.DATOS_URL, { cf: { cacheTtl: 60, cacheEverything: true } });
+    const r = await fetch(url, { cf: { cacheTtl: 60, cacheEverything: true } });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    cache = { t: Date.now(), datos: preparar(await r.json()) };
+    const datos = preparar(await r.json());
+    cache.set(url, { t: Date.now(), datos });
+    return datos;
   } catch (e) {
-    if (!cache) throw e;     // sin datos nuevos, uso los que tenía
-    console.log("no pude actualizar los precios:", e.message);
+    if (hay) {                 // sin datos nuevos, uso los que tenía
+      console.log("no pude actualizar los precios:", e.message);
+      return hay.datos;
+    }
+    if (parte) return cargar(env, null);   // (corridas viejas: solo el completo)
+    throw e;
   }
-  return cache.datos;
 }
 
 // ---------------------------------------------------------------- marcas "❌ Sin stock" (KV)
@@ -95,12 +107,21 @@ export async function responderConBotones(texto, cargarDatos, ahora = Date.now()
   }
   let datos;
   try {
-    datos = await cargarDatos();
+    // primero el índice (chips, /estado, /filtros); para buscar, solo la categoría que hace falta
+    datos = await cargarDatos("indice");
+    if (cmd === "/estado") return { texto: `${pie(datos, ahora)}\n\n${datos.estado}` };
+    if (cmd === "/filtros") return { texto: datos.filtros };
+    if (arg.trim()) {
+      const q = interpretar(arg, datos.chips);
+      const conCategoria = await cargarDatos(q.cat);
+      const r = buscar(conCategoria, arg, ahora, marcas);
+      // sin nada en esa categoría: con el completo, para la sugerencia ("¿quisiste decir…?")
+      if (q.cat && !r.botones?.length) return buscar(await cargarDatos(null), arg, ahora, marcas);
+      return r;
+    }
   } catch {
     return { texto: "⚠️ No pude leer los precios de la última corrida (GitHub no respondió). Probá en un rato." };
   }
-  if (cmd === "/estado") return { texto: `${pie(datos, ahora)}\n\n${datos.estado}` };
-  if (cmd === "/filtros") return { texto: datos.filtros };
   return buscar(datos, arg, ahora, marcas);
 }
 
@@ -216,7 +237,7 @@ export default {
       return new Response("");
     }
     try {
-      const r = await responderConBotones(msg.text, () => cargar(env), Date.now(), await leerMarcas(env));
+      const r = await responderConBotones(msg.text, (parte) => cargar(env, parte), Date.now(), await leerMarcas(env));
       await enviar(env, chat, r.texto, r.botones);
     } catch (e) {
       console.log("error respondiendo:", e.name);

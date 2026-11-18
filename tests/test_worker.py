@@ -177,3 +177,22 @@ def test_misma_clave_para_el_boton_sin_stock():
                        encoding="utf-8", cwd=WORKER, timeout=60)
     assert p.returncode == 0, p.stderr
     assert json.loads(p.stdout) == [clave_url(u) for u in urls]
+
+
+def test_exportar_por_categoria(tmp_path):
+    db = DB(":memory:")
+    _oferta(db, "umart", "AU", "ram", "Kingston Fury DDR5 32GB (2x16GB) 6000 CL30", 199, "https://u/1")
+    _oferta(db, "umart", "AU", "placas", "MSI RTX 5070 Ti 16GB Ventus", 1799, "https://u/2")
+    d = exportar.armar(db, {}, Cotizacion(1600, 0.67, AHORA), {}, AHORA)
+    partes = exportar.por_categoria(d)
+    assert set(partes) == {"indice", *exportar.CATEGORIAS}
+    assert partes["indice"]["p"] == [] and partes["indice"]["chips"] == ["RTX 5070 Ti"]
+    assert partes["indice"]["estado"] == d["estado"]
+    placas = partes["placas"]
+    assert [m[0] for m in placas["modelos"]] == ["RTX 5070 Ti 16GB"]
+    assert [(placas["modelos"][f[0]][0], f[4]) for f in placas["p"]] == [("RTX 5070 Ti 16GB", "https://u/2")]
+    assert [f[4] for f in partes["ram"]["p"]] == ["https://u/1"] and partes["ssd"]["p"] == []
+    ruta = tmp_path / "precios.json"
+    exportar.guardar_todo(d, ruta)
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(
+        ["precios.json", "precios-indice.json"] + [f"precios-{c}.json" for c in exportar.CATEGORIAS])
