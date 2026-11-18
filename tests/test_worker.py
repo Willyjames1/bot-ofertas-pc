@@ -136,7 +136,7 @@ def _oferta(db, tienda, pais, cat, titulo, precio, url, hace_min=10, **extra):
 
 def test_exportar_compacto():
     db = DB(":memory:")
-    for i in range(12):   # 12 RTX 5070 Ti en Argentina: van solo las 8 más baratas
+    for i in range(20):   # 20 RTX 5070 Ti en Argentina: van solo las 16 más baratas
         _oferta(db, "venex", "AR", "placas", f"MSI RTX 5070 Ti 16GB Ventus {i}", 2_300_000 + i * 10_000, f"https://v/{i}",
                 tipo_precio="contado")
     _oferta(db, "staticice", "AU", "placas", "Gigabyte RTX 5070 Ti 16GB Eagle", 1799, "https://m/1",

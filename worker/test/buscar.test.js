@@ -157,3 +157,63 @@ test("❌ Sin stock: un botón por resultado y lo marcado no aparece hasta que l
     { [h]: "2026-11-18T16:00:00.000Z" });
   assert.doesNotMatch(otraVez.texto, /https:\/\/m\/1"/);
 });
+
+// ---------------------------------------------------------------- cuántos resultados (r<N>)
+
+function muchos() {
+  const tiendas = Array.from({ length: 20 }, (_, i) => `Tienda con nombre largo número ${i}`);
+  const p = [];
+  for (let i = 0; i < 20; i++) {
+    p.push([0, "AU", 1700 + i * 10, i, `https://au.example.com/productos/placa-de-video-${i}-con-un-link-largo`,
+      `MSI Gaming Trio OC White Edition ${i}`, 30, "", 0, 0]);
+    p.push([0, "AR", 2_300_000 + i * 10_000, i, `https://ar.example.com/productos/placa-de-video-${i}-con-un-link-largo`,
+      `ASUS ROG Astral OC Edition ${i}`, 30, "transferencia", 0, 0]);
+  }
+  p.push([1, "AU", 199, 0, "https://u/r1", "Kingston", 20, "", 0, 0]);
+  return preparar({
+    v: 2, ts: "2026-11-18T15:00:00+00:00", cot: { mep: 1600, aud_usd: 0.67, nota: null },
+    reglas: { franquicia_usd: 500, arancel: 0.5, valija_aud: 150, conviene_pct: 10 }, tiendas,
+    modelos: [["RTX 5070 Ti 16GB", "placas", { chip: "RTX 5070 Ti", vram: 16 }],
+      ["DDR5 32GB (2x16) 6000 CL30", "ram", { capacidad_gb: 32, modulos: 2, velocidad: 6000, cl: 30 }],
+      ["Ryzen 7 9800X3D", "cpu", { marca: "AMD", nucleos: 8 }]],
+    p, motivos: [""], ocultos: {}, posts: [], estado: "", filtros: "",
+  });
+}
+const cuantos = (txt, bandera) => (txt.split(`${bandera} <b>`)[1]?.split("\n\n")[0].match(/^\d+\. /gm) || []).length;
+
+test("r<N>: cuántos por país, en cualquier parte del texto, con país y marca", () => {
+  const d = muchos();
+  assert.equal(cuantos(buscar(d, "5070 ti", AHORA).texto, "🇦🇺"), 5);                 // sin r: 5
+  const r10 = buscar(d, "5070 ti r10", AHORA).texto;
+  assert.equal(cuantos(r10, "🇦🇺"), 10);
+  assert.equal(cuantos(r10, "🇦🇷"), 10);
+  assert.match(r10, /🔎 <b>RTX 5070 Ti 16GB<\/b>\n/);
+  assert.doesNotMatch(r10, /Pediste/);
+  assert.equal(cuantos(buscar(d, "r3 5070 ti au", AHORA).texto, "🇦🇺"), 3);
+  assert.equal(cuantos(buscar(d, "msi R12 5070 ti au", AHORA).texto, "🇦🇺"), 12);
+  const ar = buscar(d, "5070ti ar r7", AHORA).texto;
+  assert.equal(cuantos(ar, "🇦🇷"), 7);
+  assert.doesNotMatch(ar, /Australia/);
+});
+
+test("r<N>: hasta 16; si pedís más, 16 y lo avisa; r7 9800x3d es Ryzen", () => {
+  const d = muchos();
+  const r40 = buscar(d, "/buscar 5070 ti r40".replace("/buscar ", ""), AHORA);
+  assert.equal(cuantos(r40.texto, "🇦🇺"), 16);
+  assert.match(r40.texto, /ℹ️ Pediste r40: muestro hasta 16 por país \(lo máximo\)/);
+  // los botones: 16 por país, en filas de 8, numerados como la lista
+  assert.deepEqual(r40.botones.map((f) => f.length), [8, 8, 8, 8]);
+  assert.equal(r40.botones[1][7].text, "❌ 🇦🇺 16");
+  assert.equal(r40.botones[2][0].text, "❌ 🇦🇷 1");
+  assert.equal(interpretar("r7 9800x3d", d.chips).f.modelo, "Ryzen 7 9800X3D");
+  assert.equal(interpretar("r7 9800x3d", d.chips).cantidad, 5);
+  assert.equal(interpretar("r16 ddr5 32gb au", d.chips).cantidad, 16);
+  assert.equal(interpretar("r16 ddr5 32gb au", d.chips).cat, "ram");
+  assert.equal(interpretar("r10 5070 ti", d.chips).cantidad, 10);
+  assert.equal(interpretar("r5 7600x", d.chips).cantidad, 5);
+  assert.equal(interpretar("r9 9950x3d au", d.chips).pedida, null);
+  assert.equal(interpretar("r3 5070 ti", d.chips).cantidad, 3);
+  assert.equal(interpretar("ddr5 32gb", d.chips).cantidad, 5);              // "ddr5" no es r5
+  // sin resultados: la sugerencia mantiene la cantidad
+  assert.match(buscar(d, "zotac 5070 ti r10", AHORA).texto, /No encontré «zotac 5070 ti»[\s\S]*\/buscar 5070 TI r10/i);
+});

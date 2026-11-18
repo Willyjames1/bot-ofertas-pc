@@ -23,6 +23,8 @@ export const AYUDA = [
   "/buscar 5070 ti — los 5 más baratos en 🇦🇷 y 🇦🇺 y si conviene traerlo",
   "/buscar ddr5 32gb au — solo Australia (o <code>ar</code>, solo Argentina)",
   "/buscar ryzen 7 9800x3d · /buscar ssd 2tb gen4 · /buscar pc 5070 ti · /buscar asus 5070 ti",
+  "Cuántos: <code>r</code> y un número, en cualquier parte (hasta r16; sin r, 5 por país):",
+  "/buscar 5070 ti r10 · /buscar r16 ddr5 32gb au · /buscar asus 5070 ti ar r3",
   "También podés escribir lo que buscás directo, sin /buscar.",
   "",
   "Primero aparece lo de stock confirmado; lo que no se pudo confirmar va al final y lo dice.",
@@ -102,15 +104,31 @@ export async function responderConBotones(texto, cargarDatos, ahora = Date.now()
   return buscar(datos, arg, ahora, marcas);
 }
 
-export function partir(texto) {
+/**
+ * Telegram corta en 4.096 caracteres: parto en mensajes de hasta LIMITE, primero entre bloques
+ * (país, cuenta, OzBargain) y, si un bloque solo no entra, entre productos: un producto son su
+ * línea de precio y las que siguen con sangría ("   detalle"), y nunca queda partido.
+ */
+export function partir(texto, limite = LIMITE) {
+  const unidades = [];   // [texto, separador antes]
+  for (const [b, bloque] of texto.split("\n\n").entries()) {
+    if (bloque.length <= limite) { unidades.push([bloque, b ? "\n\n" : ""]); continue; }
+    const productos = [];
+    for (const linea of bloque.split("\n")) {
+      if (productos.length && /^\s/.test(linea)) productos[productos.length - 1] += `\n${linea}`;
+      else productos.push(linea);
+    }
+    productos.forEach((p, i) => unidades.push([p, i ? "\n" : (b ? "\n\n" : "")]));
+  }
   const partes = [];
   let actual = "";
-  for (const bloque of texto.split("\n\n")) {
-    if (actual && actual.length + bloque.length + 2 > LIMITE) { partes.push(actual); actual = ""; }
-    actual = actual ? `${actual}\n\n${bloque}` : bloque;
+  for (const [u, sep] of unidades) {
+    if (actual && actual.length + sep.length + u.length > limite) { partes.push(actual); actual = ""; }
+    actual = actual ? actual + sep + u : u;
   }
   if (actual) partes.push(actual);
-  return partes.flatMap((p) => (p.length > LIMITE ? p.match(new RegExp(`[\\s\\S]{1,${LIMITE}}`, "g")) : [p]));
+  // un solo producto de más de LIMITE no pasa nunca, pero por las dudas: corte duro
+  return partes.flatMap((p) => (p.length > limite ? p.match(new RegExp(`[\\s\\S]{1,${limite}}`, "g")) : [p]));
 }
 
 async function api(env, metodo, cuerpo) {

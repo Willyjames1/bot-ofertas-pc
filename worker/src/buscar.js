@@ -6,8 +6,10 @@ import { cuenta, lineasCuenta } from "./comparar.js";
 import { ars, escapar, hace, horaArgentina, plata, usd } from "./formato.js";
 import { claveUrl } from "./sha1.js";
 
-export const MOSTRAR = 5;
+export const MOSTRAR = 5;       // por país, si no pedís otra cantidad con r<N>
+export const MAX_MOSTRAR = 16;  // lo más que se puede pedir (lo que exporta cada corrida por modelo y país)
 const BANDERA = { AU: "🇦🇺", AR: "🇦🇷" };
+const BOTONES_POR_FILA = 8;     // Telegram muestra hasta 8 botones por fila
 const NOMBRE_PAIS = { AU: "Australia", AR: "Argentina" };
 const PAISES = ["AU", "AR"];
 // palabras que describen el producto pero que ya entendió el normalizador (o que no filtran nada)
@@ -38,16 +40,38 @@ export function preparar(d) {
 
 // ---------------------------------------------------------------- entender la búsqueda
 
+// "r10", "R16": cuántos resultados por país. "r7 9800x3d", "r5 7600" o "r7 7700x" son Ryzen, no una
+// cantidad: r3/r5/r7/r9 seguido de un número con sufijo de Ryzen (X, X3D, G, F) o que no es de una placa
+// ("r3 5070 ti" = 3 resultados de la 5070 Ti; "r7 7700" a secas, por la RX 7700 XT, también).
+const RE_CANTIDAD = /(?<![\p{L}\p{N}])r(\d{1,4})(?![\p{L}\p{N}])/giu;
+const RE_RYZEN_MODELO = /^\s+(\d{4})(X3D|XT|X|GE|G|F)?(?![\p{L}\p{N}])/iu;
+
+/** Saca la cantidad del texto: { resto, pedida, cantidad, tope } (tope = pediste más del máximo). */
+export function cantidadPedida(texto, chips = new Set()) {
+  const esRyzen = (x) => {
+    const m = /^[3579]$/.test(x[1]) && RE_RYZEN_MODELO.exec(texto.slice(x.index + x[0].length));
+    if (!m) return false;
+    const sufijo = (m[2] || "").toUpperCase();
+    return (sufijo && sufijo !== "XT") || ![...chips].some((c) => c.split(" ").includes(m[1]));
+  };
+  const m = [...texto.matchAll(RE_CANTIDAD)].find((x) => !esRyzen(x));
+  if (!m) return { resto: texto, pedida: null, cantidad: MOSTRAR, tope: false };
+  const pedida = Number(m[1]);
+  const resto = (texto.slice(0, m.index) + " " + texto.slice(m.index + m[0].length)).replace(/\s+/g, " ").trim();
+  return { resto, pedida, cantidad: Math.min(MAX_MOSTRAR, Math.max(1, pedida)), tope: pedida > MAX_MOSTRAR };
+}
+
 export function interpretar(texto, chips) {
   let pais = null;
-  let t = String(texto).replaceAll("🇦🇺", " AU ").replaceAll("🇦🇷", " AR ");
+  const c = cantidadPedida(String(texto), chips);
+  let t = c.resto.replaceAll("🇦🇺", " AU ").replaceAll("🇦🇷", " AR ");
   t = N.limpiar(t).replace(/(?<![A-Z0-9])(AU|AUS|AUSTRALIA|AR|ARG|ARGENTINA)(?![A-Z0-9])/g, (x) => {
     pais = x.startsWith("AU") ? "AU" : "AR";
     return " ";
   }).replace(/\s+/g, " ").trim();
   const extra = t.split(" ").filter((w) => w && !/\d/.test(w) && !NO_FILTRA.has(w));
   const esPc = /(?<![A-Z0-9])(PC|PCS|COMPUTADORA|DESKTOP|PREBUILT|OMEN|VICTUS)(?![A-Z0-9])/.test(t) || N.esPcArmada(t);
-  const q = { texto: t, pais, extra, cat: null, f: {} };
+  const q = { texto: t, original: c.resto, pais, extra, cat: null, f: {}, cantidad: c.cantidad, pedida: c.pedida, tope: c.tope };
   if (!t) return q;
 
   let gpu = N.placa(t);
@@ -184,7 +208,7 @@ function linea(f, cot, varios) {
 }
 
 function titulo(q, porPais, texto) {
-  const modelos = new Set(PAISES.flatMap((p) => porPais[p].slice(0, MOSTRAR).map((f) => f.m.nombre)));
+  const modelos = new Set(PAISES.flatMap((p) => porPais[p].slice(0, q.cantidad).map((f) => f.m.nombre)));
   if (modelos.size === 1) return [...modelos][0];
   const f = q.f;
   switch (q.cat) {
@@ -234,14 +258,14 @@ export function oculto(datos, marcas, h) {
   return !visto || Date.parse(marcas[h]) > Date.parse(visto) + 1000;
 }
 
-/** Las primeras MOSTRAR que no marcaste sin stock (con su clave, para el botón). */
-function primeras(datos, lista, marcas) {
+/** Las primeras n que no marcaste sin stock (con su clave, para el botón). */
+function primeras(datos, lista, marcas, n = MOSTRAR) {
   const salida = [];
   for (const f of lista) {
     f.h ??= claveUrl(f.url);
     if (oculto(datos, marcas, f.h)) continue;
     salida.push(f);
-    if (salida.length >= MOSTRAR) break;
+    if (salida.length >= n) break;
   }
   return salida;
 }
@@ -260,24 +284,27 @@ export function buscar(datos, texto, ahora = Date.now(), marcas = {}) {
   const edadDatos = Math.max(0, (ahora - datos.generado) / 60000);
   const paises = q.pais ? [q.pais] : PAISES;
   const top = {};
-  for (const p of paises) top[p] = primeras(datos, porPais[p], marcas).map((f) => ({ ...f, edadDatos }));
+  for (const p of paises) top[p] = primeras(datos, porPais[p], marcas, q.cantidad).map((f) => ({ ...f, edadDatos }));
+  const r = q.pedida != null ? ` r${q.cantidad}` : "";      // las sugerencias mantienen la cantidad que pediste
   if (!paises.some((p) => top[p].length)) {
     const s = sugerencia(datos, q);
     const donde = q.pais ? ` en ${BANDERA[q.pais]}` : "";
-    let txt = `🔎 No encontré «${escapar(texto.trim())}»${donde} con stock en las tiendas que leo.`;
+    let txt = `🔎 No encontré «${escapar(q.original)}»${donde} con stock en las tiendas que leo.`;
     if (s?.sinPalabras) {
       const sin = q.texto.split(" ").filter((w) => !s.sinPalabras.includes(w)).join(" ").toLowerCase();
-      txt += `\nSin «${escapar(s.sinPalabras.join(" ").toLowerCase())}» sí hay: /buscar ${escapar(sin)}${q.pais ? " " + q.pais.toLowerCase() : ""}`;
+      txt += `\nSin «${escapar(s.sinPalabras.join(" ").toLowerCase())}» sí hay: /buscar ${escapar(sin)}${q.pais ? " " + q.pais.toLowerCase() : ""}${r}`;
     } else if (s?.modelo) {
       txt += `\n¿Quisiste decir <b>${escapar(s.modelo.nombre)}</b>? → /buscar ${escapar(s.modelo.nombre.toLowerCase())}` +
-        (q.pais ? " " + q.pais.toLowerCase() : "");
+        (q.pais ? " " + q.pais.toLowerCase() : "") + r;
     } else {
       txt += "\nProbá con el chip, el modelo o la capacidad: /buscar 5070 ti · /buscar ddr5 32gb · /buscar ssd 2tb";
     }
     return { texto: txt + "\n\n" + pie(datos, ahora) };
   }
   const varios = new Set(paises.flatMap((p) => top[p].map((f) => f.m.nombre))).size > 1;
-  const bloques = [`🔎 <b>${escapar(titulo(q, porPais, texto))}</b>` + (q.pais ? ` en ${BANDERA[q.pais]}` : "")];
+  let cabeza = `🔎 <b>${escapar(titulo(q, porPais, q.original))}</b>` + (q.pais ? ` en ${BANDERA[q.pais]}` : "");
+  if (q.tope) cabeza += `\nℹ️ Pediste r${q.pedida}: muestro hasta ${MAX_MOSTRAR} por país (lo máximo)`;
+  const bloques = [cabeza];
   for (const p of paises) {
     if (!top[p].length) {
       bloques.push(`${BANDERA[p]} <b>${NOMBRE_PAIS[p]}</b>: sin precio con stock en las tiendas que leo`);
@@ -309,8 +336,11 @@ export function buscar(datos, texto, ahora = Date.now(), marcas = {}) {
         .filter(Boolean).join(" · ")})`).join("\n"));
   }
   bloques.push(pie(datos, ahora) + "\n❌ = ya no tiene stock: lo oculto hasta que la tienda lo vuelva a mostrar con stock");
-  // un ❌ por resultado, una fila por país (el número es el de la lista)
-  const botones = paises.filter((p) => top[p].length).map((p) =>
-    top[p].map((f, i) => ({ text: `❌ ${BANDERA[p]} ${i + 1}`, callback_data: `x:${f.h}` })));
+  // un ❌ por resultado, filas de hasta 8 por país (el número es el de la lista)
+  const botones = [];
+  for (const p of paises) {
+    const fila = top[p].map((f, i) => ({ text: `❌ ${BANDERA[p]} ${i + 1}`, callback_data: `x:${f.h}` }));
+    for (let i = 0; i < fila.length; i += BOTONES_POR_FILA) botones.push(fila.slice(i, i + BOTONES_POR_FILA));
+  }
   return { texto: bloques.join("\n\n"), botones };
 }

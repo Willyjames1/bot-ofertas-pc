@@ -29,7 +29,7 @@ from .cotizaciones import ARANCEL, FRANQUICIA_USD, Cotizacion
 from .db import DB
 
 VERSION = 2
-POR_MODELO = 8
+POR_MODELO = 16     # lo máximo que deja pedir /buscar (r16)
 HORAS_POSTS = 48
 MAX_POSTS = 40
 CATEGORIAS = ("placas", "cpu", "ram", "ssd", "pcs")

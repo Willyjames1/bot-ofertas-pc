@@ -47,8 +47,11 @@ lee OzBargain y me avisa **solo** de lo que pasa mis filtros de `config.yaml`.
 - **Búsquedas desde Telegram, al instante**: `/buscar 5070 ti` (o escribir directo "5070 ti")
   responde en segundos con los 5 más baratos de cada país, pasados a dólares y pesos, de hace cuánto
   es cada precio, el link y la misma cuenta de los avisos (diferencia, valija, aduana y veredicto).
-  `/buscar ddr5 32gb au` (o `ar`) mira un solo país; `/buscar asus 5070 ti` filtra por marca. Si no
-  encuentra nada sugiere el modelo más parecido. Lo responde un Worker de Cloudflare (ver abajo).
+  `/buscar ddr5 32gb au` (o `ar`) mira un solo país; `/buscar asus 5070 ti` filtra por marca.
+  `r` y un número, en cualquier parte, elige cuántos por país (`/buscar 5070 ti r10`,
+  `/buscar r16 ddr5 32gb au`): hasta 16; si pedís más, muestra 16 y lo avisa. `r7 9800x3d` sigue
+  siendo un Ryzen. Si la respuesta pasa el límite de Telegram, llega en varios mensajes, sin
+  cortar ningún producto. Si no encuentra nada sugiere el modelo más parecido. Lo responde un Worker de Cloudflare (ver abajo).
 
 ## Cómo está armado
 
@@ -223,7 +226,7 @@ Las instrucciones paso a paso te las voy dando en el chat; acá queda el resumen
 ## Búsquedas desde Telegram (Worker de Cloudflare)
 
 - **Cómo llegan los precios**: al final de cada corrida, `exportar.py` escribe `precios.json` y el
-  workflow lo sube a la rama `datos` junto con la base. Tiene las 8 más baratas de cada modelo y
+  workflow lo sube a la rama `datos` junto con la base. Tiene las 16 más baratas de cada modelo y
   país (nada sin stock, ver "Stock" abajo), las cotizaciones, las reglas de la cuenta, los posts de
   OzBargain de las últimas 48 h y los textos de `/estado` y `/filtros`. Pesa unos 220 KB.
 - **El Worker** (`worker/src/index.js`) recibe cada mensaje por webhook, lee ese JSON de

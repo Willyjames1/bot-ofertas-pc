@@ -149,3 +149,23 @@ test("botones de otro (o en otro chat): silencio y no guarda nada", async () => 
   assert.equal(pedidos.length, 0);
   assert.equal(env.OCULTOS.m.size, 0);
 });
+
+test("mensajes largos: se parten sin cortar un producto y sin pasar los 4.096", () => {
+  const productos = Array.from({ length: 40 }, (_, i) =>
+    `${i + 1}. <b>A$${1700 + i}</b> ≈ USD 1.200 · <a href="https://tienda.example.com/${"x".repeat(60)}/${i}">Tienda ${i}</a>\n` +
+    `   MSI Gaming Trio OC ${"y".repeat(40)} · hace 30 min · ⚠️ stock sin confirmar (staticICE no informa stock)`);
+  const texto = ["🔎 <b>RTX 5070 Ti 16GB</b>", "🇦🇺 <b>Australia</b> — los 40 más baratos\n" + productos.join("\n"),
+    "⚖️ <b>Traerlo de 🇦🇺</b>", "🕒 Precios de la corrida"].join("\n\n");
+  assert.ok(texto.length > 8000);
+  const partes = partir(texto);
+  assert.ok(partes.length >= 3);
+  assert.ok(partes.every((p) => p.length <= 4000));
+  for (const p of partes) {
+    // cada producto entero en una sola parte: ninguna empieza con la línea de detalle ni termina en un precio suelto
+    assert.doesNotMatch(p, /^ {3}/);
+    assert.doesNotMatch(p, /\d+\. <b>A\$\d+<\/b>[^\n]*$/);
+  }
+  for (const pr of productos) assert.ok(partes.some((p) => p.includes(pr)), "producto partido");
+  // lo que entra en uno, igual que antes
+  assert.deepEqual(partir("a\n\nb"), ["a\n\nb"]);
+});
