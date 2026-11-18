@@ -24,11 +24,11 @@ export function preparar(d) {
   const modelos = d.modelos.map(([nombre, cat, datos], i) => ({
     i, nombre, cat, datos, clave: N.limpiar(nombre), filas: { AR: [], AU: [] },
   }));
-  for (const [mi, pais, precio, ti, url, detalle, haceMin, tipo, staticice, iMotivo] of d.p) {
+  for (const [mi, pais, precio, ti, url, detalle, haceMin, tipo, staticice, iMotivo, h] of d.p) {
     const m = modelos[mi];
     // motivo vacío = stock confirmado (JSON viejo, sin motivos: lo de staticICE queda sin confirmar)
     const motivo = iMotivo == null ? (staticice ? "staticICE no informa stock" : "") : (d.motivos?.[iMotivo] ?? "");
-    m.filas[pais].push({ m, pais, precio, tienda: d.tiendas[ti], url, detalle, haceMin, tipo, ok: !motivo, motivo, busca: null });
+    m.filas[pais].push({ m, pais, precio, tienda: d.tiendas[ti], url, detalle, haceMin, tipo, ok: !motivo, motivo, busca: null, h: h ?? null });
   }
   // los chips de TODAS las categorías (los archivos por categoría los traen en "chips")
   const chips = new Set([...Object.keys(VRAM_POR_DEFECTO), ...(d.chips || [])]);
@@ -233,10 +233,20 @@ function titulo(q, porPais, texto) {
   }
 }
 
+// el número que tiene que aparecer sí o sí en el título (el 5070 de una RTX 5070 Ti, el 9800 de un
+// 9800X3D): descarta la mayoría de los posts sin correr el normalizador entero (en un isolate nuevo
+// cada regex cuesta). La RAM no: "2x16GB" son 32 GB sin que diga 32.
+function numeroClave(q) {
+  const fuente = { placas: q.f.chip, pcs: q.f.chip, cpu: q.f.modelo }[q.cat];
+  return /\d{3,5}/.exec(fuente || "")?.[0] ?? null;
+}
+
 function postsQueCoinciden(datos, q) {
   if (q.pais === "AR") return [];
-  return (datos.posts || []).filter(([tit]) => {
-    const t = N.limpiar(tit);
+  const numero = numeroClave(q);
+  return (datos.posts || []).filter(([tit, , , , , limpio]) => {
+    const t = limpio ?? N.limpiar(tit);
+    if (numero && !t.includes(numero)) return false;
     switch (q.cat) {
       case "placas": return N.chipGpu(t) === q.f.chip;
       case "cpu": return N.cpu(t)?.modelo === q.f.modelo;
@@ -286,11 +296,12 @@ export function responderBusqueda(datos, texto, ahora = Date.now(), marcas = {})
 }
 
 /** La respuesta a /buscar: { texto, botones } (botones = inline_keyboard con un ❌ por resultado). */
-export function buscar(datos, texto, ahora = Date.now(), marcas = {}) {
+/** q: lo que ya entendió interpretar() (para no volver a correr el normalizador en el mismo pedido). */
+export function buscar(datos, texto, ahora = Date.now(), marcas = {}, q0 = null) {
   if (!texto.trim()) {
     return { texto: "Decime qué buscás, por ejemplo:\n/buscar 5070 ti\n/buscar ddr5 32gb au\n/buscar ryzen 7 9800x3d ar" };
   }
-  const q = interpretar(texto, datos.chips);
+  const q = q0 ?? interpretar(texto, datos.chips);
   const porPais = filas(datos, q);
   const edadDatos = Math.max(0, (ahora - datos.generado) / 60000);
   const paises = q.pais ? [q.pais] : PAISES;

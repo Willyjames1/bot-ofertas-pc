@@ -155,7 +155,9 @@ def test_exportar_compacto():
     assert len(ar) == exportar.POR_MODELO and [f[2] for f in ar] == sorted(f[2] for f in ar)
     assert d["tiendas"][ar[0][3]] == "Venex" and ar[0][5] == "MSI Ventus" and ar[0][6] == 10 and ar[0][7] == "contado"
     assert au[0][8] == 1 and au[0][2] == 1799          # staticICE: avisa que no informa stock
-    assert d["posts"] == [["RTX 5070 Ti $1599 @ Scorptec", "https://oz/1", 40, 1599.0, 120]]
+    assert d["posts"] == [["RTX 5070 Ti $1599 @ Scorptec", "https://oz/1", 40, 1599.0, 120, limpiar("RTX 5070 Ti $1599 @ Scorptec")]]
+    from bot.stock import clave_url
+    assert all(f[10] == clave_url(f[4]) for f in d["p"])        # la clave del botón ❌ ya calculada
     assert "Tiendas" in d["estado"] or "Todavía" in d["estado"]
 
 

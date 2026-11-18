@@ -114,9 +114,9 @@ export async function responderConBotones(texto, cargarDatos, ahora = Date.now()
     if (arg.trim()) {
       const q = interpretar(arg, datos.chips);
       const conCategoria = await cargarDatos(q.cat);
-      const r = buscar(conCategoria, arg, ahora, marcas);
+      const r = buscar(conCategoria, arg, ahora, marcas, q);
       // sin nada en esa categoría: con el completo, para la sugerencia ("¿quisiste decir…?")
-      if (q.cat && !r.botones?.length) return buscar(await cargarDatos(null), arg, ahora, marcas);
+      if (q.cat && !r.botones?.length) return buscar(await cargarDatos(null), arg, ahora, marcas, q);
       return r;
     }
   } catch {

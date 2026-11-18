@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import comandos, normalizar as N
+from .stock import clave_url
 from .comparar import CONVIENE_PCT, HORAS_OTRO_PAIS, valija_de
 from .config import RAIZ
 from .cotizaciones import ARANCEL, FRANQUICIA_USD, Cotizacion
@@ -91,10 +92,12 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
                     r["tipo_precio"] if r["tipo_precio"] in TIPOS_PRECIO else "",
                     1 if d.get("via") == "staticICE" else 0,                # vino de staticICE
                     i_motivo[motivo],                                       # 0 = stock confirmado
+                    clave_url(r["url"]),       # para el botón ❌ (así el Worker no calcula sha1 en cada pedido)
                 ])
     limite = (ahora - timedelta(hours=HORAS_POSTS)).isoformat(timespec="seconds")
     posts = [[p["titulo"], p["url"], p["votos"], p["precio"],
-              max(0, int((ahora - datetime.fromisoformat(p["publicado"])).total_seconds() // 60))]
+              max(0, int((ahora - datetime.fromisoformat(p["publicado"])).total_seconds() // 60)),
+              N.limpiar(p["titulo"])]           # ya limpio: el Worker no lo hace en cada pedido
              for p in db.c.execute("SELECT * FROM posts WHERE fuente='ozbargain' AND publicado>=? "
                                    "ORDER BY publicado DESC LIMIT ?", (limite, MAX_POSTS))]
     return {
@@ -105,14 +108,14 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
                    "conviene_pct": CONVIENE_PCT},
         "tiendas": tiendas,
         "modelos": modelos,
-        # [modelo, país, precio, tienda, link, detalle, hace_min, tipo_precio, staticICE, motivo]
+        # [modelo, país, precio, tienda, link, detalle, hace_min, tipo_precio, staticICE, motivo, clave]
         "p": filas,
         "motivos": motivos,
         # los "❌ Sin stock" que ya incorporó la base (clave = sha1(link)[:16] → cuándo lo tocaste). El
         # Worker oculta lo que tocaste DESPUÉS (todavía no está acá); lo de acá ya lo resuelve la base:
         # fuera del JSON mientras siga sin stock, de vuelta cuando la tienda lo tiene otra vez
         "ocultos": {o["h"]: o["ts"] for o in db.c.execute("SELECT h, ts FROM ocultos")},
-        # [título, link, votos, precio A$, hace_min]
+        # [título, link, votos, precio A$, hace_min, título limpio]
         "posts": posts,
         "estado": comandos.estado_texto(db),
         "filtros": comandos.filtros_texto(cfg),
