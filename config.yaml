@@ -15,19 +15,16 @@ placas:
   precio_max: {AUD: 2600, ARS: 3500000}
   # objetivos: avisa (una vez por tienda y modelo, y de nuevo solo si baja otro 3%) cuando el
   # precio queda por debajo. AUD con GST; ARS precio de transferencia/contado.
+  # objetivos de los posts de OzBargain (AUD con GST). Los de las tiendas están en compras.items
   objetivos:
-    RTX 5070 Ti: {AUD: 1450, ARS: 2100000}
-    RTX 5080: {AUD: 1900, ARS: 2800000}
-    RX 9070 XT: {AUD: 950, ARS: 1400000}
+    RTX 5070 Ti: {AUD: 1440}
 
+# CPU: ya comprado (Ryzen 9 9900X, ver compras.comprado): se siguen leyendo los precios para /buscar,
+# pero no avisa nada
 cpu:
   activo: true
   socket: [AM5]
   nucleos_min: 8
-  objetivos:
-    Ryzen 9 9900X: {AUD: 580, ARS: 650000}
-    Ryzen 9 9950X: {AUD: 800, ARS: 1000000}
-    Ryzen 9 9950X3D: {AUD: 880, ARS: 1200000}
 
 ram:
   activo: true
@@ -39,8 +36,7 @@ ram:
   # objetivos de RAM: "capacidad (módulos x GB) velocidad". La velocidad es mínima (un kit 6400
   # también cuenta para "6000"); lo que no se pone, no se exige.
   objetivos:
-    32GB (2x16) 6000: {AUD: 550, ARS: 750000}
-    64GB (2x32): {AUD: 1100, ARS: 1800000}
+    32GB (2x16) 6000: {AUD: 500}
 
 # PCs armadas. Australia: posts de OzBargain con alguna de las palabras de abajo. Argentina:
 # las secciones de PCs de las tiendas. Avisan solo si traen una placa gpu_min o superior
@@ -83,7 +79,6 @@ resumen_diario:
   productos:
     placas: [RTX 5070 Ti, RTX 5080]
     ram: [32GB (2x16) 6000, 64GB (2x32) 6000]
-    cpu: [Ryzen 9 9900X, Ryzen 9 9950X]
     pcs: [RTX 5070 Ti]
 
 mothers: {activo: true, chipsets: [B850, X870, X870E], wifi: true}
@@ -92,7 +87,9 @@ mothers: {activo: true, chipsets: [B850, X870, X870E], wifi: true}
 ssd: {activo: true, capacidad_tb: [2, 4], gen_min: 4}
 fuentes: {activo: true, watts_min: 850, certificacion_min: Gold, atx3: true}
 refrigeracion: {activo: true, tipos: [AIO 360, AIO 280]}
-gabinetes: {activo: false}
+gabinetes: {activo: true}
+teclados: {activo: true}
+mouse: {activo: true}
 monitores: {activo: false}
 
 general:
@@ -137,13 +134,74 @@ stock:
   # el Worker de Telegram: de ahí se traen los "❌ Sin stock" que tocaste
   worker_url: https://bot-ofertas.williamjames2907.workers.dev
 
+# ------------------------------------------------------------
+#  Lo que te falta comprar: SOLO esto avisa por bajas de precio en las tiendas.
+#  Argentina: objetivo en USD MEP del día, sobre el precio real (transferencia o cuotas
+#  pasadas a contado, lo que sea menor). Australia: AUD con GST.
+# ------------------------------------------------------------
+compras:
+  comprado: {cpu: Ryzen 9 9900X}     # esas categorías no avisan más
+  hermano:
+    franquicia_usd: 500              # una sola para TODO lo que traiga: la aduana va sobre el total
+    trae: [ram, placas, ssd, mouse]  # esto se busca en 🇦🇺 y 🇦🇷; lo demás, solo en 🇦🇷
+    viaje: principios de diciembre
+  items:
+    - {nombre: RTX 5070 Ti, categoria: placas, chip: RTX 5070 Ti, objetivo: {AUD: 1440, USD: 1250}}
+    - nombre: RAM DDR5 32GB (2x16) 6000 CL30-36
+      categoria: ram
+      ram: 32GB (2x16) 6000
+      cl_min: 30
+      cl_max: 36
+      objetivo: {AUD: 500, USD: 520}
+    # 990 Pro, SN850X, MP700 PRO "o similar": M.2 Gen4/Gen5 2TB de 7000 MB/s o más (ssd_modelos.yaml)
+    - {nombre: SSD M.2 2TB Gen4/Gen5, categoria: ssd, capacidad_tb: 2, gen_min: 4, lectura_min: 7000,
+       objetivo: {AUD: 380, USD: 230}}
+    - nombre: Mother B850 WiFi (ASUS TUF o equivalente)
+      categoria: mothers
+      chipsets: [B850]
+      wifi: true
+      lineas: [TUF, ROG STRIX, TOMAHAWK, MPG, AORUS ELITE, AORUS PRO, AORUS MASTER, STEEL LEGEND, TAICHI, PROART]
+    - {nombre: Fuente 850W 80+ Gold ATX 3.1, categoria: fuentes, watts_min: 850, certificacion_min: Gold, atx_min: 3.1}
+    # mid tower con lugar para un radiador de 360: el título dice "360" o es uno de estos modelos
+    - nombre: Gabinete mid tower (radiador 360)
+      categoria: gabinetes
+      modelos_360: [LANCOOL 207, LANCOOL 215, LANCOOL 216, LANCOOL 217, LANCOOL III, O11 DYNAMIC, O11 VISION,
+                    VECTOR, H5 FLOW, H6 FLOW, H7 FLOW, H9 FLOW, 3500X, 4000D, 4000X, 5000D, 5000X, 6500X,
+                    NORTH, MESHIFY 2, TORRENT, AIR 903, KING 95, SKY TWO, XT PRO, NX800, CX600]
+    - {nombre: Cooler AIO 360, categoria: refrigeracion, radiador: 360}
+    # teclado y mouse: decime qué modelos y los agrego acá (palabras del título, ej. [G502 X, VIPER V3])
+    - {nombre: Teclado, categoria: teclados, modelos: []}
+    - {nombre: Mouse, categoria: mouse, modelos: []}
+
+# baja que avisa: X% abajo de la mediana de 30 días (en 🇦🇷, en USD MEP). Las placas también avisan
+# con un mínimo histórico; bajo el objetivo avisa siempre.
+umbrales_baja: {placas: 8, ram: 10, ssd: 10, mothers: 10, fuentes: 10, gabinetes: 10, refrigeracion: 10,
+                teclados: 15, mouse: 15}
+
+cuotas:
+  # para pasar las cuotas a contado: % mensual, o plazo_fijo (la TNA mediana de los bancos / 12,
+  # de api.argentinadatos.com, una vez por día)
+  tasa_mensual_pct: plazo_fijo
+  # las promos de un banco solo cuentan para el precio real si tenés esa tarjeta (ej. [ICBC, Galicia]);
+  # las de todos los bancos, MODO y Mercado Pago cuentan siempre. Se muestran todas igual.
+  mis_tarjetas: []
+  fichas_hardgamers_por_corrida: 8   # fichas de HardGamers (mínimo de 75 días e historial) por corrida
+  fichas_tiendas_por_corrida: 10     # páginas de producto (cuotas) por corrida, 3 por tienda como mucho
+
 black_friday:
   desde: 2026-11-20
   hasta: 2026-12-02
+  ofertas_desde: 2026-11-27        # los 14 días antes se miran para el "⚠️ descuento inflado"
   feeds_cada_min: 10
-  tiendas_cada_min: 20
+  tiendas_cada_min: 10             # cada tienda, cada 20 min (2 turnos)
+  fase2_cada_horas: 3
   votos_ozbargain_urgente: 15
-  tope_alertas_que_suenan_por_dia: 10
+  tope_alertas_que_suenan_por_dia: 12
+  # resumen de lo que te falta comprar (hora argentina)
+  resumen:
+    activo: true
+    dias: [2026-11-27]
+    horas: ["09:00", "13:00", "20:00"]
 
 foros:
   ozbargain:

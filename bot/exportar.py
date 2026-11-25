@@ -94,6 +94,10 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
     filas: list[list] = []
     motivos: list[str] = [""]          # [0] = stock confirmado; el resto, por qué no se pudo confirmar
     i_motivo: dict[str, int] = {"": 0}
+    from . import cuotas as CU, fichas
+    tasa = CU.tasa_mensual(db, cfg)[0]
+    pagos: dict[str, list] = {}         # 🇦🇷: clave → [lista, cuotas, valor cuota, sin interés, contado, real]
+    promos: dict[str, list[str]] = {}   # nombre de la tienda → las promos de banco (las 2 primeras)
     for pais in ("AR", "AU"):
         for cat in CATEGORIAS:
             vistos: Counter = Counter()
@@ -123,6 +127,13 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
                 if motivo not in i_motivo:
                     i_motivo[motivo] = len(motivos)
                     motivos.append(motivo)
+                if pais == "AR":
+                    pg = fichas.pagos_de(db, cfg, r, tasa, ahora)
+                    if pg.plan or pg.lista:
+                        pagos[clave_url(r["url"])] = pg.a_lista()
+                    nombre_t = nombres.get(r["tienda"], r["tienda"])
+                    if pg.promos and nombre_t not in promos:
+                        promos[nombre_t] = pg.promos[:2]
                 filas.append([
                     i_modelo[clave], pais, round(r["precio"]), i_tienda[r["tienda"]], r["url"],
                     _detalle(cat, r, d),
@@ -152,6 +163,10 @@ def armar(db: DB, cfg: dict, cot: Cotizacion | None, nombres: dict, ahora: datet
         # (+ los SSD: [modelo de ssd_modelos.yaml, lectura, escritura])
         "p": filas,
         "motivos": motivos,
+        # 🇦🇷: clave → [lista, cuotas, valor cuota, sin interés (1/0), contado, precio real] (de las fichas
+        # y las promos de la tienda; real = transferencia o cuotas a contado, lo que sea menor)
+        "pagos": pagos,
+        "promos": promos,
         # los "❌ Sin stock" que ya incorporó la base (clave = sha1(link)[:16] → cuándo lo tocaste). El
         # Worker oculta lo que tocaste DESPUÉS (todavía no está acá); lo de acá ya lo resuelve la base:
         # fuera del JSON mientras siga sin stock, de vuelta cuando la tienda lo tiene otra vez
@@ -168,7 +183,7 @@ def por_categoria(datos: dict) -> dict[str, dict]:
     leer 300 KB enteros en cada pedido se pasaba de los 10 ms de CPU del plan gratis) y un índice
     sin precios (chips, /estado y /filtros). Cada uno tiene el mismo formato que el completo."""
     chips = sorted({m[2]["chip"] for m in datos["modelos"] if m[2].get("chip")})
-    salida = {"indice": {**datos, "modelos": [], "p": [], "chips": chips}}
+    salida = {"indice": {**datos, "modelos": [], "p": [], "chips": chips, "pagos": {}}}
     for cat in CATEGORIAS:
         nuevo: dict[int, int] = {}
         modelos = []
@@ -177,7 +192,9 @@ def por_categoria(datos: dict) -> dict[str, dict]:
                 nuevo[i] = len(modelos)
                 modelos.append(m)
         filas = [[nuevo[f[0]], *f[1:]] for f in datos["p"] if f[0] in nuevo]
-        salida[cat] = {**datos, "modelos": modelos, "p": filas, "chips": chips}
+        claves = {f[10] for f in filas}
+        pagos = {k: v for k, v in (datos.get("pagos") or {}).items() if k in claves}
+        salida[cat] = {**datos, "modelos": modelos, "p": filas, "chips": chips, "pagos": pagos}
     return salida
 
 

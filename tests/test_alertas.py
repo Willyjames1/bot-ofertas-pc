@@ -45,11 +45,9 @@ def test_filtros_ram_y_cpu():
 
 def test_objetivos():
     o = oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1400)
-    assert objetivo_de(CFG, "placas", o.modelo, o.datos, "AUD") == 1450
-    r = oferta("Kingston FURY 64GB (2x32GB) DDR5 6000MHz CL30", 500, cat="ram")
-    assert objetivo_de(CFG, "ram", r.modelo, r.datos, "ARS") == 1800000
-    c = oferta("AMD Ryzen 9 9950X3D AM5", 850, cat="cpu")
-    assert objetivo_de(CFG, "cpu", c.modelo, c.datos, "AUD") == 880
+    assert objetivo_de(CFG, "placas", o.modelo, o.datos, "AUD") == 1440
+    r = oferta("Kingston FURY 32GB (2x16GB) DDR5 6000MHz CL30", 500, cat="ram")
+    assert objetivo_de(CFG, "ram", r.modelo, r.datos, "AUD") == 500
 
 
 def test_cuenta_y_veredicto():
@@ -67,16 +65,17 @@ def test_motor_objetivo_y_repetidas():
     db = DB(":memory:")
     inicio = datetime.now(timezone.utc)
     m = Motor(CFG, AJ, db, COT, inicio)
-    o = oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1449)
+    o = oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1439)
     av = m.evaluar_oferta(o, db.guardar_oferta(o))
     assert len(av) == 1 and av[0].urgente and "objetivo" in av[0].texto
     assert av[0].texto.startswith("🎯 <b>RTX 5070 Ti 16GB</b> — bajo tu objetivo en 🇦🇺")
-    assert "≈ USD 985 ≈ $1.556.806 (MEP $1.580)" in av[0].texto
+    assert "≈ USD 979 ≈ $1.546.062 (MEP $1.580)" in av[0].texto
+    assert "🧳 La franquicia de USD 500 es una sola" in av[0].texto
     assert "Sin precio para comparar" in av[0].texto
     tg = Telegram(Secretos("", "1", ""), dry_run=True)
     despachar(av, tg, db, CFG, AJ, Secretos("", "1", ""), datetime(2026, 11, 15, 15, tzinfo=timezone.utc))
     # misma tienda+modelo, baja solo 1%: no repite
-    o2 = oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1435, url=o.url)
+    o2 = oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1425, url=o.url)
     assert not [a for a in m.evaluar_oferta(o2, db.guardar_oferta(o2)) if a.urgente]
     # baja otro 3%+: avisa de nuevo
     o3 = oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1390, url=o.url)
@@ -86,17 +85,18 @@ def test_motor_objetivo_y_repetidas():
 def test_minimo_historico_necesita_un_dia():
     db = DB(":memory:")
     hace2 = datetime.now(timezone.utc) - timedelta(days=2)
-    viejo = oferta("Sapphire RX 9070 Pulse 16GB", 1000, fecha=hace2, url="https://x/a")
+    # (solo suena lo que te falta comprar: la 5070 Ti, arriba del objetivo de A$1.440)
+    viejo = oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1700, fecha=hace2, url="https://x/a")
     db.guardar_oferta(viejo)
     m = Motor(CFG, AJ, db, COT, datetime.now(timezone.utc))
-    nuevo = oferta("Sapphire RX 9070 Pulse 16GB", 960, url="https://x/b", tienda="msy")
+    nuevo = oferta("ASUS RTX 5070 Ti 16G Prime", 1650, url="https://x/b", tienda="msy")
     av = m.evaluar_oferta(nuevo, db.guardar_oferta(nuevo))
     assert av and "mínimo histórico" in av[0].texto
     db2 = DB(":memory:")
-    db2.guardar_oferta(oferta("Sapphire RX 9070 Pulse 16GB", 1000, url="https://x/a",
+    db2.guardar_oferta(oferta("MSI RTX 5070 Ti 16G Ventus 3X OC", 1700, url="https://x/a",
                               fecha=datetime.now(timezone.utc) - timedelta(hours=2)))
     m2 = Motor(CFG, AJ, db2, COT, datetime.now(timezone.utc))
-    n2 = oferta("Sapphire RX 9070 Pulse 16GB", 960, url="https://x/b", tienda="msy")
+    n2 = oferta("ASUS RTX 5070 Ti 16G Prime", 1650, url="https://x/b", tienda="msy")
     assert not [a for a in m2.evaluar_oferta(n2, db2.guardar_oferta(n2)) if a.urgente]
 
 
@@ -155,7 +155,8 @@ def test_hermano_solo_australia_y_hasta_el_viaje():
 def test_black_friday():
     bf = config.ajustes(CFG, datetime(2026, 11, 27, 15, tzinfo=timezone.utc))
     assert bf["black_friday"] and bf["feeds_cada_min"] == 10 and bf["votos_ozbargain_urgente"] == 15
-    assert bf["tope_alertas_que_suenan_por_dia"] == 10
+    assert bf["tope_alertas_que_suenan_por_dia"] == 12 and bf["tiendas_cada_min"] == 10
+    assert bf["fase2_cada_horas"] == 3
     assert not config.ajustes(CFG, datetime(2026, 12, 3, 15, tzinfo=timezone.utc))["black_friday"]
 
 
@@ -216,7 +217,10 @@ def test_oportunidad_usa_solo_orden_de_gamas():
     db = DB(":memory:")
     db.guardar_oferta(oferta("AMD Ryzen 9 9950X AM5", 900, cat="cpu", url="https://x/9950x"))
     db.guardar_oferta(oferta("AMD Ryzen 9 9950X3D AM5", 890, cat="cpu", url="https://x/x3d", tienda="msy"))
-    av = Motor(CFG, AJ, db, COT, datetime.now(timezone.utc)).evaluar_oportunidades()
+    # el CPU ya está comprado (compras.comprado): no avisa
+    assert Motor(CFG, AJ, db, COT, datetime.now(timezone.utc)).evaluar_oportunidades() == []
+    cfg = {**CFG, "compras": {**CFG["compras"], "comprado": {}}}
+    av = Motor(cfg, AJ, db, COT, datetime.now(timezone.utc)).evaluar_oportunidades()
     assert len(av) == 1 and "9950X3D" in av[0].texto and "Ryzen 9 9950X a" in av[0].texto
 
 

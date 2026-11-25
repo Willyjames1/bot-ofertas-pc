@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, time, timezone
 from html import escape
 
+from . import cuotas as CU, fichas
 from .alertas import ICONO, NOMBRE_TIENDA, pasa_filtros, ram_cumple
 from .comparar import BANDERA, cuenta, plata, valija_de
 from .config import TZ_AR
@@ -73,20 +74,31 @@ def texto(db: DB, cfg: dict, cot: Cotizacion | None, ahora: datetime | None = No
         aud = f"{cot.aud_usd:.3f}".replace(".", ",")
         cab += f"\nMEP {ars(cot.mep)} · A$1 = USD {aud}"
     bloques = [cab]
+    tasa = CU.tasa_mensual(db, cfg)[0]
     for categoria, nombres in productos.items():
+        if ((cfg.get("compras") or {}).get("comprado") or {}).get(categoria):
+            continue   # ya comprado
         for nombre in nombres or []:
             ar = mejor_de_hoy(db, cfg, categoria, str(nombre), "AR", desde)
             au = mejor_de_hoy(db, cfg, categoria, str(nombre), "AU", desde)
             icono = ICONO.get(categoria, "•").split(" ")[0]
             lineas = [f"{icono} <b>{escape(_titulo(categoria, str(nombre)))}</b>"]
-            lineas.append(f"  {BANDERA['AR']} " + (f"{ars(ar['precio'])} · {_tienda(ar)}" if ar else "sin precio hoy"))
+            real_ar = None
+            if ar:
+                pg = fichas.pagos_de(db, cfg, ar, tasa, ahora)
+                real_ar = pg.real
+                tipo = f" {ar['tipo_precio']}" if ar.get("tipo_precio") in ("transferencia", "contado") else ""
+                cuotas = (f" · 💳 {CU.describir_plan(pg.plan)} (≈ {ars(pg.contado)} contado)" if pg.plan else "")
+                lineas.append(f"  {BANDERA['AR']} {ars(ar['precio'])}{tipo}{cuotas} · {_tienda(ar)}")
+            else:
+                lineas.append(f"  {BANDERA['AR']} sin precio hoy")
             if au:
                 conv = f" ≈ {ars(cot.aud_a_ars(au['precio']))}" if cot else ""
                 lineas.append(f"  {BANDERA['AU']} {plata(au['precio'], 'AUD')}{conv} · {_tienda(au)}")
             else:
                 lineas.append(f"  {BANDERA['AU']} sin precio hoy")
             if ar and au and cot:
-                c = cuenta(cot, au["precio"], ar["precio"], valija_de(cfg))
+                c = cuenta(cot, au["precio"], real_ar or ar["precio"], valija_de(cfg))
                 if c.diferencia >= 0:
                     dif = f"{c.diferencia_pct:.0f}% más barato en {BANDERA['AU']}"
                 else:

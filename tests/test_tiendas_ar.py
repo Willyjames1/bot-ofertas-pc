@@ -166,6 +166,8 @@ def test_mensaje_ar_muestra_tipo_de_precio_y_lista(tmp_path):
                           titulo="Placa de Video ASUS RTX 5070 Ti 16GB Prime OC", precio=2_000_000,
                           tipo_precio="transferencia", precio_lista=2_200_000))
     texto = m.texto_oferta("prueba", o, None, None, None)
-    assert "transferencia · lista" in texto and "Gezatek" in texto
+    assert "💵 Transferencia: <b>$2.000.000</b>" in texto and "💳 Lista: $2.200.000" in texto
+    assert "@ Gezatek" in texto
     o.tienda, o.tipo_precio, o.precio_lista = "venex", "contado", None
-    assert "@ Venex: <b>$2.000.000</b> contado" in m.texto_oferta("minimo", o, None, None, None)
+    t = m.texto_oferta("minimo", o, None, None, None)
+    assert "@ Venex\n💵 Contado: <b>$2.000.000</b>" in t and "Lista" not in t

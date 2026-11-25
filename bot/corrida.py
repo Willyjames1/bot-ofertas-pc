@@ -12,7 +12,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import alertas, config, cotizaciones, exportar, feeds, resumen as resumen_diario, stock
+from . import alertas, black_friday, config, cotizaciones, cuotas, exportar, feeds, fichas, historial
+from . import resumen as resumen_diario, stock
 from .alertas import Aviso, Motor
 from .db import DB
 from .fuentes import TIENDAS
@@ -41,7 +42,7 @@ def tiendas_del_turno(turno: int, turnos: int, activas: list[str] | None = None)
     return [t for n, t in enumerate(ids) if n % turnos == turno % turnos]
 
 
-FASE2 = {"mothers", "ssd", "fuentes", "refrigeracion", "gabinetes", "monitores"}
+FASE2 = {"mothers", "ssd", "fuentes", "refrigeracion", "gabinetes", "monitores", "teclados", "mouse"}
 
 
 def categorias_a_leer(db: DB, cfg: dict, aj: dict, tid: str, ahora: datetime) -> list[str]:
@@ -53,7 +54,7 @@ def categorias_a_leer(db: DB, cfg: dict, aj: dict, tid: str, ahora: datetime) ->
     for n, cat in enumerate(TIENDAS[tid].categorias):
         if not (cfg.get(cat) or {}).get("activo", True):
             continue
-        if una:   # tiendas pesadas (HardGamers): una sola categoría por corrida, la que hace más que no se lee
+        if una and cat not in FASE2:   # tiendas pesadas (HardGamers): una sola categoría por corrida
             pendientes.append((db.get(f"ult_cat:{tid}:{cat}") or "", n, cat))
             continue
         if cat in FASE2:
@@ -65,6 +66,30 @@ def categorias_a_leer(db: DB, cfg: dict, aj: dict, tid: str, ahora: datetime) ->
     if pendientes:
         cats.append(min(pendientes)[2])
     return cats
+
+
+def caidas_ar(db: DB, ahora: datetime) -> set[str]:
+    """Tiendas argentinas que leemos directo pero están en pausa o fallaron las 3 últimas corridas:
+    HardGamers las lee por nosotros (sin pedirle nada a la tienda)."""
+    salida = set()
+    for tid, cls in TIENDAS.items():
+        if cls.pais != "AR" or tid == "hardgamers":
+            continue
+        ult = [r["ok"] for r in db.c.execute(
+            "SELECT ok FROM corridas_tienda WHERE tienda=? ORDER BY ts DESC LIMIT 3", (tid,))]
+        if en_pausa(db, tid, ahora) or (len(ult) == 3 and not any(ult)):
+            salida.add(tid)
+    return salida
+
+
+def pausa_por_bloqueo(db: DB, aj: dict, tid: str, ahora: datetime) -> datetime:
+    """Si nos frena de nuevo, la pausa se duplica (2 h, 4 h, 8 h... hasta 24 h)."""
+    n = int(db.get(f"bloqueos:{tid}", "0")) + 1
+    db.set(f"bloqueos:{tid}", str(n))
+    horas = min(24.0, aj["pausa_si_bloquea_horas"] * 2 ** (n - 1))
+    hasta = ahora + timedelta(hours=horas)
+    db.set(f"pausa:{tid}", hasta.isoformat())
+    return hasta
 
 
 def en_pausa(db: DB, tid: str, ahora: datetime) -> bool:
@@ -167,7 +192,21 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
             db.set("saludo", inicio.isoformat())
 
     cot = cotizaciones.obtener(db)
-    motor = Motor(cfg, aj, db, cot, inicio)
+    # el MEP de cada día (para comparar en USD contra hace 7 y 30 días) y la tasa de plazo fijo
+    # (para pasar las cuotas a contado): una vez por día cada una
+    cli_datos = Cliente(pausa=(0.3, 0.6), respetar_robots=False)
+    try:
+        historial.actualizar_mep(db, cli_datos, cot.mep if cot else None, inicio)
+    except Exception as e:  # noqa: BLE001
+        log.warning("No pude actualizar el historial del MEP: %s", type(e).__name__)
+    try:
+        tasa, tasa_desc = cuotas.tasa_mensual(db, cfg, cli_datos, inicio)
+    except Exception as e:  # noqa: BLE001
+        log.warning("No pude bajar la tasa de plazo fijo: %s", type(e).__name__)
+        tasa, tasa_desc = cuotas.TASA_RESPALDO_MENSUAL, "respaldo"
+    cli_datos.cerrar()
+    resumen["tasa_mensual"] = round(tasa * 100, 2)
+    motor = Motor(cfg, aj, db, cot, inicio, tasa=tasa)
     avisos: list[Aviso] = []
 
     # los "❌ Sin stock" que tocaste en Telegram (los guarda el Worker)
@@ -182,10 +221,17 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
     if hacer_tiendas and TIENDAS:
         turno = int(db.get("turno", "0"))
         ids = tiendas_del_turno(turno, aj["turnos_tiendas"])
+        if "mercadolibre" in ids:
+            from .fuentes import mercadolibre
+            if not mercadolibre.preparar(db):   # sin credenciales (o no se pudo renovar el token): no se lee
+                ids.remove("mercadolibre")
+                resumen["tiendas"]["mercadolibre"] = {"productos": 0, "error": None, "nota": "sin credenciales"}
         for t in [t for t in ids if en_pausa(db, t, inicio)]:
             ids.remove(t)
             resumen["tiendas"][t] = {"productos": 0, "error": f"en pausa hasta {db.get(f'pausa:{t}')}"}
         cats = {t: categorias_a_leer(db, cfg, aj, t, inicio) for t in ids}
+        if "hardgamers" in TIENDAS:
+            TIENDAS["hardgamers"].tambien = caidas_ar(db, inicio)
         log.info("Turno %d: %s", turno, ", ".join(ids))
         with ThreadPoolExecutor(max_workers=max(1, len(ids))) as ex:
             futuros = [ex.submit(leer_tienda, t, cats[t]) for t in ids if cats[t]]
@@ -218,10 +264,11 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
                     if cat in FASE2 or getattr(TIENDAS[tid], "una_categoria_por_corrida", False):
                         db.set(f"ult_cat:{tid}:{cat}", inicio.isoformat())
                 if error and error.startswith("bloqueada"):
-                    # nos frenó: la dejamos descansar antes de volver a pedirle nada
-                    hasta = inicio + timedelta(hours=aj["pausa_si_bloquea_horas"])
-                    db.set(f"pausa:{tid}", hasta.isoformat())
+                    # nos frenó: la dejamos descansar antes de volver a pedirle nada (cada vez más)
+                    hasta = pausa_por_bloqueo(db, aj, tid, inicio)
                     log.warning("%s nos frenó: la dejo en pausa hasta %s", tid, hasta.isoformat())
+                elif error is None:
+                    db.set(f"bloqueos:{tid}", "0")
                 if not ok:
                     log.warning("%s quedó como caída", tid)
         db.set("nombres_tiendas", json.dumps(alertas.NOMBRE_TIENDA, ensure_ascii=False, sort_keys=True))
@@ -229,6 +276,25 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
         db.set("ult_tiendas", inicio.isoformat())
         db.commit()
         avisos += motor.evaluar_oportunidades()
+
+    # 2b) cuotas y promos de lo que te falta comprar: las promos de las páginas de las tiendas (una vez
+    # por día) y las fichas de producto de las 5 más baratas de cada cosa (cuotas, y en HardGamers el
+    # mínimo de 75 días y el historial). Avisa si una tienda agregó o aumentó cuotas sin interés.
+    if hacer_tiendas and solo in (None, "tiendas"):
+        cli = Cliente(pausa=(2.0, 4.0))
+        cli_hg = Cliente(pausa=(5.0, 7.0), timeout=40.0)    # HardGamers: Crawl-delay 5
+        try:
+            nuevas = fichas.leer_promos(db, cli, inicio)
+            avisos += motor.evaluar_promos(nuevas)
+            cambios = fichas.leer_fichas(db, cfg, inicio, cli_hg, cli, aj)
+            avisos += motor.evaluar_cuotas(cambios)
+            resumen["fichas"] = {"promos_nuevas": len(nuevas), "cuotas_nuevas": len(cambios)}
+        except Exception as e:  # noqa: BLE001 — que no frene la corrida
+            log.warning("Falló la lectura de cuotas y promos: %s: %s", type(e).__name__, e)
+        finally:
+            cli.cerrar()
+            cli_hg.cerrar()
+        db.commit()
 
     # 3) foros
     hacer_feeds = solo in (None, "feeds") and (forzar or _minutos_desde(db, "ult_feeds") >= aj["feeds_cada_min"] - 3)
@@ -274,6 +340,16 @@ def correr(dry_run: bool = False, forzar: bool = False, solo: str | None = None,
                 f"{r['n'] - r['ok']} de {r['n']} corridas fallaron" for r in caidas) + "\n\nMás detalle: /estado"
             tg.enviar(sec.chat_yo, txt, silencioso=True)
         db.set("aviso_caidas", str(ahora_ar.date()))
+
+    # 4b) resumen de Black Friday (27/11 a las 9, 13 y 20 h): lo que te falta comprar y el veredicto
+    if slot := black_friday.toca(db, cfg, inicio):
+        try:
+            msgs = black_friday.textos(motor)
+            if all(tg.enviar(sec.chat_yo, m) for m in msgs):
+                black_friday.marcar_enviado(db, slot)
+                resumen["resumen_black_friday"] = slot
+        except Exception as e:  # noqa: BLE001
+            log.warning("Falló el resumen de Black Friday: %s: %s", type(e).__name__, e)
 
     # 5) resumen diario (desde las 12:00 hora argentina, una vez por día; suena)
     if resumen_diario.toca(db, cfg, inicio):

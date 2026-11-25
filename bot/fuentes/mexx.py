@@ -30,6 +30,11 @@ class Mexx(Tienda):
         "cpu": ["https://www.mexx.com.ar/productos-rubro/procesadores/?all=1"],
         "ram": ["https://www.mexx.com.ar/productos-rubro/memorias-ram/?all=1"],
         "pcs": ["https://www.mexx.com.ar/productos-rubro/gamers/?all=1"],
+        "mothers": ["https://www.mexx.com.ar/productos-rubro/motherboards/?all=1"],
+        "ssd": ["https://www.mexx.com.ar/productos-rubro/almacenamiento/?all=1"],
+        "fuentes": ["https://www.mexx.com.ar/productos-rubro/fuentes-de-poder/?all=1"],
+        "gabinetes": ["https://www.mexx.com.ar/productos-rubro/gabinetes/?all=1"],
+        "refrigeracion": ["https://www.mexx.com.ar/productos-rubro/refrigeracion/?all=1"],
     }
 
     def leer_pagina(self, url: str, categoria: str) -> tuple[list[Oferta], str | None]:

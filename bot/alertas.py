@@ -10,10 +10,10 @@ from datetime import date, datetime, time, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
 
-from . import perf
+from . import compras, cuotas as CU, fichas, historial, perf
 from .config import TZ_AR, Secretos
 from .comparar import aviso_davinci, lineas_comparacion
-from .cotizaciones import Cotizacion, ars
+from .cotizaciones import Cotizacion, ars, usd
 from .db import DB
 from .feeds import codigo_descuento, es_codigo_ebay, precio_con_codigo, vigente
 from .modelos import Oferta, Post
@@ -24,7 +24,11 @@ log = logging.getLogger("bot.alertas")
 
 ICONO = {"placas": "🎮 PLACA", "cpu": "🧠 CPU", "ram": "💾 RAM", "mothers": "🔌 MOTHER",
          "ssd": "💽 SSD", "fuentes": "⚡ FUENTE", "refrigeracion": "❄️ REFRIGERACIÓN",
+         "gabinetes": "🗄️ GABINETE", "teclados": "⌨️ TECLADO", "mouse": "🖱️ MOUSE",
          "pcs": "🖥️ PC ARMADA"}
+# el día que arrancan las ofertas de Black Friday: los 14 días antes son los que se miran para ver
+# si una tienda subió el precio para después "bajarlo" (config.yaml → black_friday.ofertas_desde)
+ANCLAJE_INFLADO = date(2026, 11, 27)
 BANDERA = {"AU": "🇦🇺", "AR": "🇦🇷"}
 NOMBRE_TIENDA: dict[str, str] = {}  # lo completa corrida.py con los nombres lindos
 # Fase 2: de las tiendas se guardan los precios, pero solo avisan si hay un objetivo puesto
@@ -176,16 +180,41 @@ def objetivo_de(cfg: dict, categoria: str, modelo: str, datos: dict, moneda: str
 # ------------------------------------------------------------------ motor
 
 class Motor:
-    def __init__(self, cfg: dict, ajustes: dict, db: DB, cot: Cotizacion | None, inicio: datetime):
+    def __init__(self, cfg: dict, ajustes: dict, db: DB, cot: Cotizacion | None, inicio: datetime,
+                 tasa: float | None = None):
         self.cfg, self.aj, self.db, self.cot, self.inicio = cfg, ajustes, db, cot, inicio
+        # tasa mensual para pasar las cuotas a contado (la de plazo fijo; la baja corrida.py)
+        self.tasa = tasa if tasa is not None else CU.tasa_mensual(db, cfg)[0]
+        bf = cfg.get("black_friday") or {}
+        self.anclaje = date.fromisoformat(str(bf.get("ofertas_desde"))) if bf.get("ofertas_desde") else ANCLAJE_INFLADO
+
+    # -------------------------------------------------- precios de Argentina
+    def pagos(self, fila: dict) -> CU.Pagos:
+        """Transferencia, lista, el mejor plan de cuotas (a contado) y las promos de la tienda."""
+        return fichas.pagos_de(self.db, self.cfg, fila, self.tasa, self.inicio)
+
+    def precio_real(self, fila: dict) -> float:
+        """Argentina: la transferencia o el valor de contado de las cuotas, el que sea menor."""
+        if fila.get("pais") != "AR" or not fila.get("precio"):
+            return fila.get("precio")
+        return self.pagos(fila).real
 
     # -------------------------------------------------- textos
     def _comparacion(self, pais: str, categoria: str, modelo: str, datos: dict, precio: float) -> list[str]:
         lineas = lineas_comparacion(self.db, self.cot, pais, categoria, modelo, datos, precio,
-                                    NOMBRE_TIENDA, self.inicio, self.cfg)
+                                    NOMBRE_TIENDA, self.inicio, self.cfg, real_ar=self.precio_real)
         if categoria == "pcs" and (dv := aviso_davinci(self.cfg, datos)):
             lineas.append(dv)
+        if pais == "AU" and categoria in compras.hermano(self.cfg)["trae"]:
+            lineas.append(f"🧳 La franquicia de USD {compras.hermano(self.cfg)['franquicia_usd']:.0f} es una sola para "
+                          "todo lo que traiga tu hermano: la cuenta del total va en el resumen de Black Friday")
         return lineas
+
+    def _referencias(self, o: Oferta, item: compras.Item | None, precio: float) -> historial.Referencias | None:
+        if item is None:
+            return None
+        return historial.referencias(self.db, o.pais, o.categoria, lambda f: item.cumple(f) and
+                                     (f.get("pais") in (None, o.pais)), precio, self.inicio)
 
     # -------------------------------------------------- códigos de descuento (OzBargain)
     def codigos(self) -> dict:
@@ -232,44 +261,74 @@ class Motor:
         return round(precio - min(precio * cod["pct"] / 100, cod.get("tope") or 1e12), 2)
 
     @staticmethod
-    def _linea_precio(o: Oferta, tienda: str, precio_antes: float | None) -> str:
-        """'🇦🇺 MSI Ventus 3X @ Centre Com: A$1.441 (antes A$1.699)'."""
+    def _linea_precio(o: Oferta, tienda: str, precio_antes: float | None = None) -> str:
+        """'🇦🇺 MSI Ventus 3X @ Centre Com: A$1.441'. En Argentina el precio va en el bloque de pagos."""
         nombre = o.titulo if o.categoria == "pcs" else (o.variante or o.titulo[:60])
-        linea = f"{BANDERA.get(o.pais, '')} {escape(nombre)} @ {escape(tienda)}: <b>{plata(o.precio, o.moneda)}</b>"
-        if o.pais == "AR" and o.tipo_precio in ("transferencia", "contado"):
-            linea += f" {o.tipo_precio}"
-            if o.precio_lista:
-                linea += f" · lista {plata(o.precio_lista, o.moneda)}"
-        if precio_antes and precio_antes > o.precio:
-            linea += f" (antes {plata(precio_antes, o.moneda)})"
-        return linea
+        if o.pais == "AR":
+            return f"{BANDERA['AR']} {escape(nombre)} @ {escape(tienda)}"
+        return f"{BANDERA.get(o.pais, '')} {escape(nombre)} @ {escape(tienda)}: <b>{plata(o.precio, o.moneda)}</b>"
+
+    def _fila(self, o: Oferta) -> dict:
+        fila = self.db.c.execute("SELECT * FROM ofertas WHERE url=?", (o.url,)).fetchone()
+        if fila:
+            return dict(fila)
+        return {"url": o.url, "tienda": o.tienda, "pais": o.pais, "categoria": o.categoria, "titulo": o.titulo,
+                "modelo": o.modelo, "datos": o.datos, "precio": o.precio, "precio_lista": o.precio_lista,
+                "combo": o.combo, "tray": o.tray}
 
     def texto_oferta(self, tipo: str, o: Oferta, precio_antes: float | None,
-                     minimo: float | None, objetivo: float | None, codigo: dict | None = None) -> str:
-        """tipo: 'objetivo' | 'minimo'. Formato:
-        🔻 RTX 5070 Ti — bajó 15% en 🇦🇺 / precio y tienda / el otro país / diferencia / aduana / veredicto."""
+                     minimo: float | None, objetivo: float | None, codigo: dict | None = None,
+                     ref: historial.Referencias | None = None, pg: CU.Pagos | None = None,
+                     objetivo_usd: float | None = None, inflado: str | None = None) -> str:
+        """tipo: 'objetivo' | 'minimo' | 'baja' | 'stock'. Formato:
+        🔻 RTX 5070 Ti — 9% abajo de la mediana de 30 días en 🇦🇷 / precio y tienda (en 🇦🇷: transferencia,
+        lista y cuotas, promo) / referencias (hoy, hace 7 y 30 días, mínimo de 75 días) / el otro país /
+        diferencia / aduana / veredicto."""
         tienda = NOMBRE_TIENDA.get(o.tienda, o.tienda)
         bandera = BANDERA.get(o.pais, "")
         modelo = escape(o.modelo or "")
         final = self.con_codigo(o.precio, codigo)
+        if o.pais == "AR" and pg is None:
+            pg = self.pagos(self._fila(o))
+        if pg is not None:
+            final = pg.real
         if tipo == "stock":
             cabeza = f"📦 <b>{modelo}</b> — volvió a tener stock en {bandera}"
-        elif precio_antes and precio_antes > o.precio:
-            cabeza = f"🔻 <b>{modelo}</b> — bajó {(1 - o.precio / precio_antes) * 100:.0f}% en {bandera}"
         elif tipo == "objetivo":
             cabeza = f"🎯 <b>{modelo}</b> — bajo tu objetivo en {bandera}"
-        else:
+        elif tipo == "baja" and ref and ref.bajo_mediana_pct is not None:
+            en = " (en USD)" if o.pais == "AR" else ""
+            cabeza = f"🔻 <b>{modelo}</b> — {ref.bajo_mediana_pct:.0f}% abajo de la mediana de 30 días{en} en {bandera}"
+        elif tipo == "baja" and precio_antes and precio_antes > o.precio:   # PCs de vendedores seguidos
+            cabeza = f"🔻 <b>{modelo}</b> — bajó {(1 - o.precio / precio_antes) * 100:.0f}% en {bandera}"
+        elif tipo == "minimo":
             cabeza = f"📉 <b>{modelo}</b> — nuevo mínimo histórico en {bandera}"
-        lineas = [cabeza, self._linea_precio(o, tienda, precio_antes)]
+        else:
+            cabeza = f"📌 <b>{modelo}</b> — {bandera}"
+        if inflado:
+            cabeza += " ⚠️"
+        lineas = [cabeza, self._linea_precio(o, tienda)]
+        if pg is not None:
+            lineas += CU.lineas_pagos(pg, o.tipo_precio)
         if codigo:
             tope = f", tope {plata(codigo['tope'], o.moneda)}" if codigo.get("tope") else ""
             lineas.append(f"🏷️ Con el código <b>{escape(codigo['codigo'])}</b> (−{codigo['pct']}%{tope}, visto en "
                           f"OzBargain): <b>{plata(final, o.moneda)}</b> — la cuenta usa este precio")
+        if inflado:
+            lineas.append(escape(inflado))
+        if ref:
+            lineas += historial.lineas_referencias(ref)
         lineas += self._comparacion(o.pais, o.categoria, o.modelo, o.datos, final)
-        if o.cuotas:
+        if pg is None and o.cuotas:
             lineas.append(f"💳 {escape(o.cuotas)}")
-        extra = [bajo_objetivo(final, objetivo, o.moneda)] if objetivo else []
-        if minimo and o.categoria != "pcs":
+        extra = []
+        if objetivo_usd and self.cot:
+            u = self.cot.ars_a_usd(final)
+            extra.append(f"🎯 Objetivo: {usd(objetivo_usd)} MEP" + (f" · <b>{(1 - u / objetivo_usd) * 100:.0f}% abajo</b> "
+                                                                     f"({usd(u)})" if u <= objetivo_usd else f" (hoy {usd(u)})"))
+        elif objetivo:
+            extra.append(bajo_objetivo(final, objetivo, o.moneda))
+        if minimo and o.categoria != "pcs" and tipo == "minimo":
             extra.append(f"📉 Mín. histórico: {plata(minimo, o.moneda)}")
         if extra:
             lineas.append(" · ".join(extra))
@@ -290,41 +349,67 @@ class Motor:
         return avisos
 
     def _evaluar_oferta(self, o: Oferta, info: dict) -> list[Aviso]:
+        """Suena solo lo que te falta comprar (config.yaml → compras.items):
+        - bajo tu objetivo (en 🇦🇷, en USD MEP del día sobre el precio real: transferencia o cuotas a contado)
+        - X% abajo de la mediana de 30 días (en USD en 🇦🇷; el X de umbrales_baja según la categoría)
+        - placas: nuevo mínimo histórico
+        Lo demás que pasa los filtros va al resumen diario."""
         # stock None = la fuente no lo informa (staticICE): se evalúa igual; antes de mandar el aviso
         # se mira la tienda real (filtrar_por_stock) y, si no se pudo confirmar, el aviso lo dice
         if o.descartada or not o.modelo or o.stock is False:
             return []
-        if not pasa_filtros(self.cfg, o.categoria, o.modelo, o.datos, o.precio, o.moneda, o.tray, o.combo):
-            return []
+        if compras.comprado(self.cfg, o.categoria):
+            return []   # ya lo compraste (compras.comprado)
         if o.categoria == "pcs":
+            if not pasa_filtros(self.cfg, o.categoria, o.modelo, o.datos, o.precio, o.moneda, o.tray, o.combo):
+                return []
             return self._evaluar_pc(o, info)
         mediana = self.db.mediana(o.modelo, o.pais)
         if mediana and o.precio <= mediana * (1 - self.aj["sospechoso_vs_mediana_pct"] / 100):
             self.db.marcar_sospechoso(info["id"], True)
             log.info("Sospechoso: %s %s a %s (mediana %s)", o.tienda, o.modelo, o.precio, mediana)
             return []
+        fila = self._fila(o)
+        item = compras.item_de(self.cfg, fila, o.pais)
+        if item is None:
+            if not pasa_filtros(self.cfg, o.categoria, o.modelo, o.datos, o.precio, o.moneda, o.tray, o.combo):
+                return []
+            return self._al_resumen(o, info, mediana)
+        pg = self.pagos(fila) if o.pais == "AR" else None
+        real = pg.real if pg else o.precio
+        ref = self._referencias(o, item, real)
         minimo, desde = self.db.minimo_historico(o.modelo, o.pais, self.inicio)
-        objetivo = objetivo_de(self.cfg, o.categoria, o.modelo, o.datos, o.moneda)
         historial_ok = desde is not None and (self.inicio - desde) >= timedelta(
             hours=self.aj["horas_historial_para_minimo"])
+        obj_usd = item.objetivo_en("USD") if o.pais == "AR" else None
+        obj = item.objetivo_en("AUD") if o.pais == "AU" else None
+        if obj is None and o.pais == "AR" and obj_usd is None:
+            obj = item.objetivo_en("ARS")
 
         tipo = None
-        if objetivo and o.precio <= objetivo:
+        if obj_usd and self.cot and self.cot.ars_a_usd(real) <= obj_usd:
             tipo = "objetivo"
-        elif historial_ok and minimo and o.precio < minimo and o.categoria not in SOLO_OBJETIVO:
+        elif obj and real <= obj:
+            tipo = "objetivo"
+        elif ref and ref.bajo_mediana_pct is not None and ref.bajo_mediana_pct >= item.umbral:
+            tipo = "baja"
+        elif o.categoria == "placas" and historial_ok and minimo and o.precio < minimo:
             tipo = "minimo"
-
-        avisos: list[Aviso] = []
-        clave = f"precio|{o.tienda}|{o.modelo}"
         if tipo:
+            clave = f"precio|{o.tienda}|{o.modelo}"
             ult = self.db.ultima_alerta(clave)
             repetida = ult is not None and ult["precio"] and \
-                o.precio > ult["precio"] * (1 - self.aj["re_aviso_baja_pct"] / 100)
+                real > ult["precio"] * (1 - self.aj["re_aviso_baja_pct"] / 100)
             if not repetida:
-                avisos.append(Aviso(tipo, clave, True, self.texto_oferta(tipo, o, info["precio_antes"],
-                                                                          minimo, objetivo), o.pais, o.precio))
-                return avisos
-        # ---- no suena: va al resumen
+                infl = historial.inflado(self.db, fila, self.inicio, self.anclaje) if fila.get("id") else None
+                texto = self.texto_oferta(tipo, o, info.get("precio_antes"), minimo, obj, ref=ref, pg=pg,
+                                          objetivo_usd=obj_usd, inflado=infl)
+                return [Aviso("baja_fuerte" if tipo == "baja" else tipo, clave, True, texto, o.pais, real)]
+        return self._al_resumen(o, info, mediana)
+
+    def _al_resumen(self, o: Oferta, info: dict, mediana: float | None) -> list[Aviso]:
+        """No suena: va al resumen diario (bajó, volvió el stock, muy abajo de la mediana)."""
+        avisos: list[Aviso] = []
         resumen = f"{o.modelo} {o.variante or ''} {plata(o.precio, o.moneda)} en {NOMBRE_TIENDA.get(o.tienda, o.tienda)}"
         antes = info.get("precio_antes")
         if antes and o.precio <= antes * (1 - self.aj.get("baja_minima_pct", 5) / 100):
@@ -338,6 +423,89 @@ class Motor:
                                 f"{resumen} ({(1 - o.precio / mediana) * 100:.0f}% bajo la mediana)",
                                 o.pais, o.precio))
         return [a for a in avisos if not self.db.ultima_alerta(a.clave)]
+
+    # -------------------------------------------------- cuotas y promos nuevas
+    def texto_cuotas(self, c) -> str:
+        """💳 Modelo — no bajó de precio, pero agregó 12 cuotas sin interés con ICBC Mastercard / pagos /
+        conviene o no conviene contra la transferencia / ⚠️ si subió la lista más de 10% en USD."""
+        f = c.fila
+        plan = c.ahora
+        pg = self.pagos(f)
+        contado = CU.valor_contado(plan.valor, plan.cuotas, self.tasa)
+        tienda = NOMBRE_TIENDA.get(f["tienda"], f["tienda"])
+        nombre = escape((f.get("variante") or f.get("titulo") or "")[:60])
+        que = f"{plan.cuotas} cuotas sin interés" + (f" con {escape(plan.medio)}" if plan.medio else "")
+        que = (f"pasó de {c.antes} a " if c.antes else "agregó ") + que
+        lista_ahora = c.lista_ahora or pg.lista
+        subio_lista = None
+        if c.lista_antes and lista_ahora and c.fecha_antes:
+            m_antes = historial.mep_en(self.db, c.fecha_antes[:10]) or (self.cot.mep if self.cot else None)
+            m_hoy = self.cot.mep if self.cot else m_antes
+            if m_antes and m_hoy:
+                subio_lista = ((lista_ahora / m_hoy) / (c.lista_antes / m_antes) - 1) * 100
+        alerta = subio_lista is not None and subio_lista > 10
+        lineas = [f"💳 <b>{escape(f['modelo'] or '')}</b> — no bajó de precio, pero {que}" + (" ⚠️" if alerta else ""),
+                  f"{BANDERA['AR']} {nombre} @ {escape(tienda)}"]
+        lineas += CU.lineas_pagos(pg, f.get("tipo_precio") or "transferencia")
+        dif = contado / f["precio"] - 1
+        if contado < f["precio"]:
+            lineas.append(f"→ ✅ Conviene: {plan.cuotas} cuotas de {ars(plan.valor)} ≈ <b>{ars(contado)}</b> contado, "
+                          f"{-dif * 100:.0f}% menos que la transferencia ({ars(f['precio'])})")
+        else:
+            lineas.append(f"→ ❌ No conviene vs. transferencia: {plan.cuotas} cuotas de {ars(plan.valor)} ≈ "
+                          f"{ars(contado)} contado, {dif * 100:.0f}% más que pagar <b>{ars(f['precio'])}</b>")
+        lineas.append(f"   (cuotas pasadas a contado con la tasa de plazo fijo: {self.tasa * 100:.1f}% por mes)"
+                      .replace(".", ",", 1))
+        if alerta:
+            lineas.append(f"⚠️ Al mismo tiempo subió el precio de lista {subio_lista:.0f}% en USD "
+                          f"({ars(c.lista_antes)} → {ars(lista_ahora)})")
+        if c.promo:
+            lineas.append(f"🏦 {escape(c.promo)}")
+        if self.cot:
+            lineas.append(f"   ≈ {usd(self.cot.ars_a_usd(pg.real))} (MEP {ars(self.cot.mep)})")
+        lineas.append(f'🔗 <a href="{escape(f["url"])}">Ver en la tienda</a>')
+        return "\n".join(lineas)
+
+    def evaluar_cuotas(self, cambios: list) -> list[Aviso]:
+        """Una tienda agregó o aumentó cuotas sin interés en lo que te falta, aunque no bajó el precio."""
+        avisos = []
+        for c in cambios:
+            f = c.fila
+            if compras.comprado(self.cfg, f["categoria"]):
+                continue
+            clave = f"cuotas|{f['url']}|{c.ahora.cuotas}|{c.ahora.medio or ''}"
+            if self.db.ultima_alerta(clave):
+                continue
+            avisos.append(Aviso("cuotas", clave, True, self.texto_cuotas(c), "AR", self.pagos(f).real, f["url"]))
+        return avisos
+
+    def evaluar_promos(self, nuevas: list) -> list[Aviso]:
+        """Promos de banco nuevas en la página de la tienda: un aviso por promo, con lo que te falta
+        comprar que tiene esa tienda (las 3 más baratas)."""
+        avisos = []
+        mis = list((self.cfg.get("cuotas") or {}).get("mis_tarjetas") or [])
+        cand = fichas.candidatas(self.db, self.cfg, self.inicio)
+        for tienda, promo in nuevas:
+            clave = f"promo|{tienda}|{promo.clave}"
+            if self.db.ultima_alerta(clave):
+                continue
+            nombre = NOMBRE_TIENDA.get(tienda, tienda)
+            lineas = [f"🏦 <b>{escape(nombre)}</b> — promo nueva: {escape(promo.texto)}"]
+            if not promo.general:
+                lineas.append("   (es con un banco: " + ("está en tus tarjetas y cuenta para el precio real)"
+                                                         if promo.vale_para(mis) else
+                                                         "si la tenés, agregala en cuotas.mis_tarjetas)"))
+            filas = sorted(((it, f) for it, f in cand if f["tienda"] in (tienda, f"hg_{tienda}")),
+                           key=lambda x: x[1]["precio"])
+            for it, f in filas[:3]:
+                pg = self.pagos(f)
+                lineas.append(f"• {escape(it.nombre)}: {escape((f.get('variante') or f['titulo'])[:50])} "
+                              f"{ars(f['precio'])} transferencia" +
+                              (f" · {CU.describir_plan(pg.plan)} ≈ {ars(pg.contado)} contado" if pg.plan else ""))
+            if not filas:
+                continue   # la tienda no tiene nada de lo que te falta: no vale la pena el aviso
+            avisos.append(Aviso("promo", clave, True, "\n".join(lineas), "AR", None, filas[0][1]["url"]))
+        return avisos
 
     def _evaluar_pc(self, o: Oferta, info: dict) -> list[Aviso]:
         """PCs armadas: cada una es distinta (CPU, RAM, disco), así que no hay mediana ni mínimo
@@ -372,6 +540,8 @@ class Motor:
         avisos = []
         for pais in ("AU", "AR"):
             for cat in ("placas", "cpu"):
+                if compras.comprado(self.cfg, cat):
+                    continue
                 mejores: dict[str, dict] = {}
                 for r in self.db.ofertas_recientes(pais, horas=6):
                     if r["categoria"] != cat or r["sospechoso"] or r["stock"] == 0:
@@ -450,7 +620,8 @@ class Motor:
             log.debug("Ignoro post %s: marketplace", p.id)
             return []
         en_filtros = [o for o in modelos if pasa_filtros(self.cfg, o.categoria, o.modelo, o.datos,
-                                                         p.precio, "AUD", o.tray, o.combo)]
+                                                         p.precio, "AUD", o.tray, o.combo)
+                      and not compras.comprado(self.cfg, o.categoria)]
         if not en_filtros:
             return []
         o = en_filtros[0]

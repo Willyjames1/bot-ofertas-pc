@@ -74,7 +74,7 @@ def ajustes(cfg: dict, ahora: datetime | None = None) -> dict:
     if es_black_friday(cfg, ahora):
         bf = cfg["black_friday"]
         for k in ("feeds_cada_min", "tiendas_cada_min", "votos_ozbargain_urgente",
-                  "tope_alertas_que_suenan_por_dia"):
+                  "tope_alertas_que_suenan_por_dia", "fase2_cada_horas", "turnos_tiendas"):
             if k in bf:
                 efectivo[k] = bf[k]
         efectivo["black_friday"] = True

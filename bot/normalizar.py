@@ -616,10 +616,118 @@ def ram_de_pc(t: str) -> int | None:
     return None
 
 
+# ---------------------------------------------------------------- mothers, fuentes, refrigeración, gabinetes, periféricos
+
+MARCAS_MOTHER = ("ASUS", "MSI", "GIGABYTE", "ASROCK", "BIOSTAR", "COLORFUL")
+CHIPSETS_AM5 = {"A620", "B650", "B650E", "X670", "X670E", "B840", "B850", "X870", "X870E"}
+RE_CHIPSET = _r(r"(?<![A-Z0-9])([ABXZH]\d{3})(E(?![A-Z]))?(M|I)?(?![0-9])")
+RE_WIFI = _r(r"WI-?FI|\bAX\b")
+# de la más específica a la más general ("AORUS ELITE" antes que "AORUS")
+LINEAS_MOTHER = ("ROG CROSSHAIR", "ROG STRIX", "TUF GAMING", "TUF", "PROART", "PRIME", "MPG CARBON", "MPG EDGE",
+                 "MAG TOMAHAWK", "TOMAHAWK", "GAMING PLUS", "MPG", "MEG", "MAG", "AORUS MASTER", "AORUS PRO",
+                 "AORUS ELITE", "AORUS", "GAMING X", "EAGLE", "AERO", "STEEL LEGEND", "TAICHI", "NOVA", "RIPTIDE",
+                 "LIGHTNING", "LIVEMIXER", "PRO RS", "CHALLENGER", "PRO")
+
+
+def parsear_mother(o: Oferta, t: str) -> None:
+    """'Mother ASUS TUF GAMING B850M-PLUS WIFI AM5' → modelo 'B850 WiFi', variante 'ASUS TUF GAMING'."""
+    m = RE_CHIPSET.search(t)
+    if not m:
+        return
+    chipset = m.group(1) + (m.group(2) or "")
+    wifi = bool(RE_WIFI.search(t))
+    marca = next((x for x in MARCAS_MOTHER if _palabra(x, t)), None)
+    linea = next((x for x in LINEAS_MOTHER if x in t), None)
+    formato = "ITX" if (m.group(3) == "I" or re.search(r"\bITX\b", t)) else \
+        "mATX" if (m.group(3) == "M" or re.search(r"MICRO ?ATX|\bM-?ATX\b", t)) else "ATX"
+    o.modelo = f"{chipset}{' WiFi' if wifi else ''}"
+    nombre = {"ASUS": "ASUS", "MSI": "MSI", "GIGABYTE": "Gigabyte", "ASROCK": "ASRock", "BIOSTAR": "Biostar",
+              "COLORFUL": "Colorful"}.get(marca or "")
+    o.variante = " ".join(x for x in (nombre, linea) if x) or None
+    o.datos = {"chipset": chipset, "wifi": wifi, "marca": marca, "linea": linea, "formato": formato,
+               "socket": "AM5" if chipset.rstrip("E") in {c.rstrip("E") for c in CHIPSETS_AM5} else None}
+
+
+CERTIFICACIONES = ("WHITE", "BRONZE", "SILVER", "GOLD", "PLATINUM", "TITANIUM")
+RE_WATTS = _r(r"(?<![\d.])(\d{3,4})\s*W(?:ATTS?)?\b")
+RE_CERT = _r(r"\b(BRONZE|SILVER|GOLD|PLATINUM|TITANIUM|BRONCE|ORO|PLATA)\b")
+RE_ATX3 = _r(r"ATX\s*-?\s*3\.?([01])")
+
+
+def parsear_fuente(o: Oferta, t: str) -> None:
+    """'Fuente Corsair 850W Cybenetics Gold RM850e Full Modular ATX 3.1 PCIe 5.1' → '850W Gold'."""
+    w = RE_WATTS.search(t)
+    if not w or not 300 <= int(w.group(1)) <= 2000:
+        return
+    c = RE_CERT.search(t)
+    cert = {"BRONCE": "BRONZE", "ORO": "GOLD", "PLATA": "SILVER"}.get(c.group(1), c.group(1)) if c else None
+    a = RE_ATX3.search(t)
+    watts = int(w.group(1))
+    o.modelo = f"{watts}W" + (f" {cert.title()}" if cert else "")
+    o.variante = None
+    o.datos = {"watts": watts, "certificacion": cert.title() if cert else None,
+               "atx": float(f"3.{a.group(1)}") if a else None,
+               "modular": "full" if re.search(r"FULL(?:Y)?[- ]?MODULAR", t) else
+               ("semi" if "SEMI" in t and "MODULAR" in t else ("si" if "MODULAR" in t else None)),
+               "sfx": bool(re.search(r"\bSFX\b", t))}
+
+
+RE_AIO = _r(r"WATER ?COOL|WATERCOOL|LIQUID|LIQUIDA|\bAIO\b|REFRIGERACION LIQ|\bLC III\b|RYUJIN|KRAKEN|"
+            r"WATER COOLER|H\d{3}I\b")
+RE_RADIADOR = _r(r"(?<!\d)(120|240|280|360|420)(?:\s*MM|L)?(?!\d)")
+
+
+def parsear_refrigeracion(o: Oferta, t: str) -> None:
+    """'Cooler CPU DeepCool LT360 ARGB Water Cooler' → 'AIO 360'; un disipador de aire → 'Cooler de aire'."""
+    if re.search(r"\b(PASTA|THERMAL PASTE|FAN|VENTILADOR|PACK X?\d|KIT DE FANS)\b", t) and not RE_AIO.search(t):
+        if not re.search(r"COOLER CPU|DISIPADOR", t):
+            return
+    rad = RE_RADIADOR.search(t)
+    aio = bool(RE_AIO.search(t)) or (rad is not None and rad.group(1) in ("240", "280", "360", "420"))
+    radiador = int(rad.group(1)) if (aio and rad) else None
+    o.modelo = f"AIO {radiador}" if radiador else ("AIO" if aio else "Cooler de aire")
+    o.variante = None
+    o.datos = {"tipo": "AIO" if aio else "aire", "radiador": radiador}
+
+
+RE_FORMATO_GAB = [("full", _r(r"FULL ?-?TOWER")), ("mid", _r(r"MID ?-?TOWER|MEDIA TORRE")),
+                  ("mini", _r(r"MINI ?-?TOWER|MICRO ?-?ATX|\bM-?ATX\b|\bMATX\b")), ("itx", _r(r"\bITX\b"))]
+
+
+def parsear_gabinete(o: Oferta, t: str) -> None:
+    formato = next((f for f, rx in RE_FORMATO_GAB if rx.search(t)), None)
+    con_fuente = bool(re.search(r"CON FUENTE|\+ ?FUENTE|FUENTE (INCLUIDA|DE \d{3})|\d{3}W", t))
+    o.modelo = {"full": "Gabinete Full Tower", "mid": "Gabinete Mid Tower", "mini": "Gabinete Mini Tower",
+                "itx": "Gabinete ITX"}.get(formato, "Gabinete")
+    o.variante = None
+    o.datos = {"formato": formato, "rad360": bool(re.search(r"(?<!\d)360(?!\d)", t)), "con_fuente": con_fuente}
+
+
+def parsear_teclado(o: Oferta, t: str) -> None:
+    if re.search(r"\b(KEYCAPS?|REPUESTO|SWITCHES|APOYA ?MU[NÑ]ECAS|FUNDA)\b", t):
+        return
+    mec = bool(re.search(r"MECANIC|MECHANICAL|SWITCH", t))
+    o.modelo = "Teclado mecánico" if mec else "Teclado"
+    o.variante = None
+    o.datos = {"mecanico": mec, "inalambrico": bool(re.search(r"INALAMBRIC|WIRELESS|BLUETOOTH|2\.4", t)),
+               "formato": "TKL" if re.search(r"\bTKL\b|TENKEYLESS|80%", t) else
+               ("60%" if "60%" in t else ("75%" if "75%" in t else None))}
+
+
+def parsear_mouse(o: Oferta, t: str) -> None:
+    if re.search(r"\b(MOUSE ?PAD|PAD|ALFOMBRILLA|SKATES|PATINES|GRIP TAPE)\b", t):
+        return
+    o.modelo = "Mouse"
+    o.variante = None
+    o.datos = {"inalambrico": bool(re.search(r"INALAMBRIC|WIRELESS|BLUETOOTH|LIGHTSPEED|2\.4", t))}
+
+
 # ---------------------------------------------------------------- entrada principal
 
 PARSERS = {"placas": parsear_placa, "cpu": parsear_cpu, "ram": parsear_ram, "pcs": parsear_pc,
-           "ssd": parsear_ssd}
+           "ssd": parsear_ssd, "mothers": parsear_mother, "fuentes": parsear_fuente,
+           "refrigeracion": parsear_refrigeracion, "gabinetes": parsear_gabinete, "teclados": parsear_teclado,
+           "mouse": parsear_mouse}
 
 
 def normalizar(o: Oferta) -> Oferta:

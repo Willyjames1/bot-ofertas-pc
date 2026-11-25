@@ -21,6 +21,9 @@ SUBCATEGORIAS = {
     "ssd": {81},
     "fuentes": {34},
     "refrigeracion": {36},
+    "gabinetes": {7},
+    "teclados": {39},
+    "mouse": {2},
 }
 
 

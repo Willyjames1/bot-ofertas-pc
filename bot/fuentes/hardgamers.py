@@ -24,11 +24,16 @@ from .base import TIENDAS, Tienda, registrar
 log = logging.getLogger("bot.fuentes")
 BASE = "https://www.hardgamers.com.ar"
 POR_PAGINA = 54
-SLUG = {"placas": "placas-de-video", "cpu": "microprocesadores", "ram": "memorias-ram", "pcs": "pcs-armadas"}
+SLUG = {"placas": "placas-de-video", "cpu": "microprocesadores", "ram": "memorias-ram", "pcs": "pcs-armadas",
+        # Fase 2 (se leen cada fase2_cada_horas): lo que te falta comprar y solo se busca en 🇦🇷
+        "mothers": "motherboards", "ssd": "almacenamiento", "fuentes": "fuentes", "refrigeracion": "refrigeracion",
+        "gabinetes": "gabinetes", "teclados": "teclados", "mouse": "mouse"}
 # franja de precios que nos interesa: abajo quedan DDR4, placas de entrada y CPUs viejos; arriba,
 # placas que pasan el precio_max y servidores
 FRANJA = {"placas": (900_000, 3_500_000), "cpu": (300_000, 2_000_000), "ram": (300_000, 3_000_000),
-          "pcs": (3_000_000, 15_000_000)}
+          "pcs": (3_000_000, 15_000_000), "mothers": (250_000, 1_500_000), "ssd": (150_000, 1_000_000),
+          "fuentes": (120_000, 900_000), "refrigeracion": (120_000, 900_000), "gabinetes": (80_000, 900_000),
+          "teclados": (40_000, 600_000), "mouse": (25_000, 400_000)}
 MAX_PAGINAS_LEIDAS = 30          # tope de seguridad por categoría y corrida
 RE_TOTAL = re.compile(r"var total = (\d+);")
 RE_ESPACIOS = re.compile(r"\s+")
@@ -49,10 +54,14 @@ class HardGamers(Tienda):
     timeout = 40.0
     categorias = {cat: [f"{BASE}/search?category={slug}"] for cat, slug in SLUG.items()}
     una_categoria_por_corrida = True
+    tambien: set[str] = set()     # tiendas argentinas caídas: se leen desde HardGamers
 
     def __init__(self, cliente=None):
         super().__init__(cliente)
-        self.saltear = {_clave(k) for k, c in TIENDAS.items() if c.pais == "AR" and k != self.id}
+        # las tiendas que leemos directo se saltean, salvo las que están caídas o nos bloquearon
+        # (corrida.py completa 'tambien': ej. Venex, que contesta 403 desde GitHub Actions)
+        self.saltear = {_clave(k) for k, c in TIENDAS.items()
+                        if c.pais == "AR" and k != self.id and k not in type(self).tambien}
         self.nombres: dict[str, str] = {}
         self.paginas_leidas = 0
         self._minimo: float | None = None

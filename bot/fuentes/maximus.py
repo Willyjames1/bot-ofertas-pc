@@ -40,6 +40,10 @@ class Maximus(Tienda):
         "ram": [_url("Memorias", 50)],
         "pcs": [_url("Computadoras", 68)],
         "ssd": [_url("Almacenamiento", 53)],
+        "mothers": [_url("Motherboards", 47)],
+        "fuentes": [_url("Fuentes", 7)],
+        "gabinetes": [_url("Gabinetes", 1)],
+        "refrigeracion": [_url("Refrigeracion", 2)],
     }
 
     def leer_pagina(self, url: str, categoria: str) -> tuple[list[Oferta], str | None]:

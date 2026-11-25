@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 CATEGORIAS = ("placas", "cpu", "ram", "pcs", "mothers", "ssd", "fuentes", "refrigeracion",
-              "gabinetes", "monitores")
+              "gabinetes", "monitores", "teclados", "mouse")
 
 
 def ahora_utc() -> datetime:

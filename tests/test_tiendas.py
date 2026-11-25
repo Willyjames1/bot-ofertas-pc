@@ -92,8 +92,8 @@ def staticice():
 def test_staticice_busquedas_salen_de_config():
     q = busquedas(CFG, ["Ryzen 5 9600X", "Ryzen 7 9800X3D", "Ryzen 9 9950X3D"])
     assert q["placas"] == CFG["placas"]["chips"]
-    # nucleos_min 8: el Ryzen 5 no se busca; los objetivos de CPU (9900X, 9950X) sí
-    assert q["cpu"] == ["9800X3D", "9950X3D", "9900X", "9950X"]
+    # nucleos_min 8: el Ryzen 5 no se busca (y ya no hay objetivos de CPU: el 9900X está comprado)
+    assert q["cpu"] == ["9800X3D", "9950X3D"]
     assert q["ram"] == ["DDR5 32GB", "DDR5 64GB", "DDR5 96GB"]
 
 
@@ -127,7 +127,7 @@ def test_sin_stock_informado_igual_avisa_y_lo_aclara():
     db = DB(":memory:")
     m = Motor(CFG, AJ, db, Cotizacion(1580.0, 0.68, datetime.now(timezone.utc)), datetime.now(timezone.utc))
     o = normalizar(Oferta("scorptec", "AU", "placas", "MSI GeForce RTX 5070 Ti 16G Ventus 3X OC",
-                          "https://www.scorptec.com.au/product/x", 1449, "AUD", stock=None,
+                          "https://www.scorptec.com.au/product/x", 1439, "AUD", stock=None,
                           datos={"via": "staticICE", "actualizado": "2026-11-16"}))
     av = m.evaluar_oferta(o, db.guardar_oferta(o))
     assert len(av) == 1 and "staticICE" in av[0].texto and "16/11" in av[0].texto

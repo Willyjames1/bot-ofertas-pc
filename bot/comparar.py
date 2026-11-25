@@ -278,10 +278,11 @@ def _tienda(fila: dict, nombres: dict) -> str:
 
 def lineas_comparacion(db: DB, cot: Cotizacion | None, pais: str, categoria: str, modelo: str,
                        datos: dict, precio: float, nombres: dict, ahora: datetime | None = None,
-                       cfg: dict | None = None) -> list[str]:
+                       cfg: dict | None = None, real_ar=None) -> list[str]:
     """Las líneas que van debajo del precio: conversión, mejor precio del otro país (o, para una
     PC australiana, armarla en Argentina por partes), diferencia, traerlo (valija + aduana) y
-    veredicto."""
+    veredicto. real_ar(fila): el precio real de una publicación argentina (la transferencia o las
+    cuotas pasadas a contado, lo que sea menor); sin eso se usa el precio publicado."""
     if not cot:
         return ["   (sin cotización: no pude convertir ni comparar)"]
     otro = OTRO[pais]
@@ -312,9 +313,12 @@ def lineas_comparacion(db: DB, cot: Cotizacion | None, pais: str, categoria: str
         stock = sin_confirmar(f)
         if otro == "AR":
             tipo = f" {f['tipo_precio']}" if f.get("tipo_precio") in ("transferencia", "contado") else ""
+            real = real_ar(f) if real_ar else f["precio"]
+            if real and real < f["precio"] - 1:
+                tipo += f", {ars(real)} en cuotas a contado"
             lineas.append(f"{BANDERA['AR']} Mejor precio: {_tienda(f, nombres)} {ars(f['precio'])}{tipo} "
                           f"({escape(eq.nota)}{stock})")
-            c = cuenta(cot, precio, f["precio"], valija)
+            c = cuenta(cot, precio, real or f["precio"], valija)
         else:
             u = cot.aud_a_usd(f["precio"])
             lineas.append(f"{BANDERA['AU']} Mejor precio: {_tienda(f, nombres)} {plata(f['precio'], 'AUD')} "

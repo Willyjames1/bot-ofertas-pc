@@ -152,6 +152,9 @@ class Cliente:
             cuerpo = r.text[:6000] if r.headers.get("content-type", "").startswith(("text", "application/xhtml")) else ""
             if r.status_code in (403, 405, 503) and any(s in cuerpo for s in SENALES_BLOQUEO):
                 raise Bloqueado(f"{host} pide verificación anti-bots (HTTP {r.status_code})")
+            if r.status_code == 403:
+                # 403 a secas (Venex, FullH4rd desde GitHub Actions): nos bloqueó; no se insiste
+                raise Bloqueado(f"{host} contesta 403 (nos bloqueó)")
             if r.status_code == 429 and intento >= 2:
                 # ya esperamos lo que pidió y sigue frenando: no insistimos
                 raise Bloqueado(f"{host} contesta 429 (demasiados pedidos)")

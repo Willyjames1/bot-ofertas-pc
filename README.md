@@ -115,6 +115,61 @@ Ver las tiendas registradas:
 python -m bot tiendas
 ```
 
+## Black Friday y lo que te falta comprar (`compras` en `config.yaml`)
+
+Desde el Black Friday, **en las tiendas suena solo lo que te falta comprar** (`compras.items`): RTX
+5070 Ti, RAM DDR5 32GB (2x16) 6000 CL30-36, SSD M.2 2TB Gen4/Gen5 (7.000 MB/s o más), mother B850
+WiFi (TUF o equivalente), fuente 850W Gold ATX 3.1, gabinete mid tower con lugar para un 360, AIO 360,
+teclado y mouse. Lo de `compras.comprado` (el Ryzen 9 9900X) no avisa más.
+
+- **Cuándo suena** (Argentina, todo en USD MEP del día; Australia en A$):
+  - bajo el objetivo (`objetivo: {AUD: 1440, USD: 1250}`): siempre;
+  - X% abajo de la **mediana de 30 días** (`umbrales_baja`: placas 8, RAM/SSD/mother/fuente/gabinete/
+    cooler 10, teclado y mouse 15);
+  - placas: también un nuevo mínimo histórico.
+  Nunca contra el "precio anterior" de la tienda.
+- **Cada aviso de 🇦🇷** trae los pagos y las referencias:
+  ```
+  💵 Transferencia: $2.348.000
+  💳 Lista: $2.720.000 · 12 cuotas sin interés de $226.700 (≈ $2.390.000 contado)
+  🏦 Promo: 12 cuotas sin interés con ICBC Mastercard
+  📊 Hoy: $2.348.000 (USD 1.349)
+     Hace 7 días: $2.269.000 (USD 1.424)
+     Hace 30 días: … (si hay datos)
+     Mínimo 75 días (HardGamers): $2.581.840
+  → En USD está 5% más barato que hace una semana ✅
+  ```
+  - **Precio real** = la transferencia o las cuotas pasadas a contado, lo que sea menor. Con eso se
+    decide el objetivo y la comparación con Australia. Las cuotas se pasan a contado con la tasa de
+    plazo fijo (mediana de la TNA de los bancos / 12, de api.argentinadatos.com; o un % fijo en
+    `cuotas.tasa_mensual_pct`).
+  - **Cuotas**: de la ficha de las 5 más baratas de cada cosa (Mexx, Gezatek y Katech; las de
+    HardGamers, de la ficha de la tienda real). Compra Gamer y Maximus: de sus promos.
+  - **Promos**: una vez por día, de las páginas de promos de Compra Gamer, Maximus, Mexx, Katech y
+    Gezatek. Las de todos los bancos, MODO y Mercado Pago cuentan para el precio real; las de un banco
+    se muestran pero cuentan solo si lo ponés en `cuotas.mis_tarjetas` (ej. `[ICBC, Galicia]`).
+    No se pueden leer: las que las tiendas publican solo como imagen, y las de Venex y FullH4rd
+    (nos bloquean).
+  - **Mínimo de 75 días**: el "precio más bajo de los últimos N días" de las fichas de HardGamers (y
+    su gráfico, que se guarda día por día). Sin eso, el de nuestro historial (desde el 16/11).
+  - **⚠️ Descuento inflado**: si en los 14 días antes del 27/11 una publicación subió 5% o más en USD
+    y después "bajó" sin quedar más barata que antes de subir.
+- **💳 Aviso de cuotas**: si una tienda agrega o aumenta cuotas sin interés (o publica una promo de
+  banco) en lo que te falta, aunque no baje el precio: "no bajó de precio, pero agregó 12 cuotas sin
+  interés … ≈ $X contado → conviene / no conviene vs. transferencia", con ⚠️ si al mismo tiempo subió
+  la lista más de 10% en USD.
+- **Resumen de Black Friday** (`black_friday.resumen`: el 27/11 a las 9, 13 y 20 h): cada cosa con el
+  precio real de hoy contra 7 y 30 días y el mínimo de 75 días, en USD MEP; cuotas y promos; y un
+  veredicto: **comprar ya** (bajo el objetivo, en el mínimo o muy abajo de la mediana), **esperar** o
+  **inflado**. Al final, **lo que conviene que traiga tu hermano**: la franquicia de USD 500 es una
+  sola para todo, así que prueba todas las combinaciones con la aduana (50% de lo que pase) sobre el
+  total y una sola valija.
+- **Modo Black Friday** (20/11 al 2/12): tiendas cada 10 min (cada tienda, cada 20 min en 2 turnos),
+  mothers/fuentes/etc. cada 3 h, foros cada 10 min y hasta 12 avisos con sonido por día. Si una
+  tienda nos frena, la pausa se duplica cada vez (2, 4, 8 h… hasta 24 h); si una tienda argentina
+  está caída (Venex: 403 desde el 18/11), sus precios se toman de HardGamers.
+- **Teclado y mouse**: no avisan hasta que pongas los modelos (`modelos: [G502 X, VIPER V3]`).
+
 ## Cambiar los filtros
 
 Editá `config.yaml`. Cada categoría tiene `activo`, sus condiciones (`chips`, `socket`,
@@ -123,10 +178,10 @@ Editá `config.yaml`. Cada categoría tiene `activo`, sus condiciones (`chips`, 
 ```yaml
 placas:
   objetivos:
-    RTX 5070 Ti: {AUD: 1450, ARS: 2100000}   # suena si alguna tienda lo pone a ese precio o menos
+    RTX 5070 Ti: {AUD: 1440}                 # posts de OzBargain a ese precio o menos
 ram:
   objetivos:
-    32GB (2x16) 6000: {AUD: 550, ARS: 750000} # capacidad, módulos y velocidad mínima
+    32GB (2x16) 6000: {AUD: 500}             # capacidad, módulos y velocidad mínima
 pcs:
   gpu_min: RTX 5070 Ti                        # esa placa o mejor (orden de perf.yaml)
   objetivo: {AUD: 3000, ARS: 4000000}
@@ -144,10 +199,13 @@ PCs de Venex, Gezatek, Mexx y Compra Gamer (esta última solo vende PCs de ofici
 en "Armá tu PC"). Mexx corta los nombres, así que la placa se lee de la ficha, solo de las PCs que
 cuestan menos que el objetivo (hasta 8 por corrida).
 
-Los precios argentinos se comparan con el de **transferencia/contado**; los australianos incluyen GST.
-En `general` están el tope de alertas por día, el silencio nocturno (00 a 08 hora argentina: llegan
-sin sonido), `mostrar_tray` y `combos`. El modo Black Friday (23/11 al 1/12) cambia solo
-la frecuencia de los foros, el umbral de votos y el tope; después vuelve solo a lo normal.
+Los precios argentinos se comparan con el **precio real** (transferencia o cuotas a contado); los
+australianos incluyen GST. En `general` están el tope de alertas por día, el silencio nocturno (00 a
+08 hora argentina: llegan sin sonido), `mostrar_tray` y `combos`. El modo Black Friday (20/11 al 2/12)
+cambia la frecuencia de tiendas y foros, el umbral de votos y el tope; después vuelve solo a lo normal.
+
+Desde el Black Friday, los objetivos de las **tiendas** están en `compras.items` (ver arriba); los de
+`placas.objetivos` y `ram.objetivos` quedan para los posts de OzBargain.
 
 ## Activar a tu hermano
 
@@ -315,18 +373,20 @@ listar con stock. Solo valen tus botones (`TELEGRAM_CHAT_ID_YO`).
 | Mexx | 🇦🇷 | cada categoría en una página (`?all=1`) | "Mejor precio" (efectivo/transferencia) y stock |
 | Maximus | 🇦🇷 | listados (`PAGE=N`) | precio transferencia, precio de lista y stock (del JSON-LD de la página) |
 | HardGamers | 🇦🇷 | comparador: listados de 54 ordenados por precio | cubre unas 45 tiendas, entre ellas **FullH4rd** (que nos bloquea). **Katech y Compra Gamer no están**. El aviso muestra la tienda real; las que ya leemos directo se saltean. Lee una categoría por corrida y solo la franja de precios que importa (búsqueda binaria), con 5–7 s entre pedidos |
+| Mercado Libre | 🇦🇷 | API oficial (OAuth2): catálogo → publicaciones de cada producto | solo nuevos de tiendas oficiales o MercadoLíder. Necesita la app aprobada (ver «Mercado Libre» abajo); sin eso no se lee |
 | eBay AU | 🇦🇺 | API oficial (Browse) | PCs nuevas de vendedores en Australia, con RTX 5070 Ti o más y Ryzen 7/9 o Core i7/i9/Ultra 7/9. Sigue a la **HP Official Store** (`hp_official`, confirmalo en su tienda de eBay): avisa si baja o si vuelve a tener stock un OMEN/Victus. Necesita las claves (ver arriba) |
 
-- **Categorías de la Fase 2** (mothers, SSD, fuentes, refrigeración): se guardan pero todavía no
-  avisan. Se leen cada 6 h y de a una por corrida, para no cargar a las tiendas.
+- **Categorías de la Fase 2** (mothers, SSD, fuentes, refrigeración, gabinetes, teclados, mouse): se
+  leen cada 6 h (3 h en Black Friday) y de a una por corrida, para no cargar a las tiendas. Avisan solo
+  si están en `compras.items`.
 - **Precios viejos en staticICE**: algunas tiendas le pasan precios desactualizados (en RAM,
   Computer & Parts Land y Austin aparecían a la mitad de lo que cobra el resto). Si la mitad o más
   de los productos de una tienda están por debajo del 75% de lo que cobran las demás por el mismo
   modelo, esa tienda no se usa en esa categoría (queda en el log).
-- **Argentina**: el precio que se compara y avisa es el de transferencia/contado; el de lista va al
-  lado cuando la tienda lo muestra en el listado (Compra Gamer y Gezatek). Ninguna de las cinco
-  muestra las cuotas sin interés en el listado, así que por ahora no aparecen en los avisos (leerlas
-  implicaría pedir la ficha de cada producto, cientos de pedidos por corrida).
+- **Argentina**: se avisa y compara con el **precio real** (transferencia, o las cuotas pasadas a
+  contado si salen menos). Las cuotas se leen solo de la ficha de las 5 más baratas de cada cosa que
+  te falta (hasta 10 fichas de tiendas y 8 de HardGamers por corrida, 3 por tienda), cada 12 h en
+  Black Friday. Ver «Black Friday y lo que te falta comprar».
 - **OzBargain**: además del feed de *Computing*, se leen los de Amazon AU, eBay AU, Scorptec,
   PC Case Gear y JB Hi-Fi (los posts repetidos se saltean). Detecta PCs, placas, CPU, RAM y SSD.
   Si un post trae un código ("Extra 20% off with code HPNOV26"), el precio de la cuenta es el
@@ -334,6 +394,31 @@ listar con stock. Solo valen tus botones (`TELEGRAM_CHAT_ID_YO`).
   aplican a lo que se lea de ella en los 10 días siguientes.
 - **Black Friday** (`black_friday` en `config.yaml`, del 20/11 al 2/12): modo intensivo.
 - `robots.txt` se respeta con comodines (`Disallow: /*sort=*`), cosa que el lector de Python no hace.
+
+## Mercado Libre (API oficial)
+
+Hace falta una app de Mercado Libre Developers aprobada (hoy la aprobación puede tardar hasta 10 días).
+
+1. Completá el formulario de alta de desarrollador (https://forms.gle/2Q39SStHLJNQLjuK9) con tu cuenta
+   de Mercado Libre y esperá el mail de aprobación. Te van a pedir validar tus datos personales.
+2. En https://developers.mercadolibre.com.ar/devcenter/ → **Crear aplicación**:
+   - Nombre y descripción: "Bot personal de precios" (uso personal, solo lectura).
+   - **Redirect URI**: `https://www.mercadolibre.com.ar` (tiene que coincidir exacto con la del paso 4).
+   - **Scopes**: lectura y `offline_access` (sin ese no hay refresh token). Permiso funcional:
+     "Publicación y sincronización" (es el que habilita leer productos y publicaciones).
+   - Sin notificaciones (no hace falta URL de callbacks).
+3. Copiá el **App ID** y la **Secret Key** al `.env` local como `ML_CLIENT_ID` y `ML_CLIENT_SECRET`
+   (nunca al código).
+4. `python -m bot mercadolibre url` → abrí el link, aceptá, y copiá el `code=…` de la barra de
+   direcciones (dura 10 minutos y se usa una vez).
+5. `python -m bot mercadolibre codigo <el código>` → canjea el código, genera `ML_CLAVE` y carga los
+   cuatro secretos (`ML_CLIENT_ID`, `ML_CLIENT_SECRET`, `ML_REFRESH_TOKEN`, `ML_CLAVE`) en GitHub con
+   `gh secret set` (por stdin: no se imprimen).
+
+El refresh token se usa una sola vez: en cada corrida se renueva y el nuevo se guarda **cifrado** con
+`ML_CLAVE` en la base (la rama `datos` es pública). Si se pierde la base o pasan 6 meses sin usarlo,
+repetí los pasos 4 y 5. Si la API contesta 401/403/429, Mercado Libre no se lee en esa corrida y no
+cuenta como tienda caída.
 
 ## Fuentes que no se pueden leer
 
@@ -345,5 +430,6 @@ listar con stock. Solo valen tus botones (`TELEGRAM_CHAT_ID_YO`).
 | Mwave (directo) | 429 | Shopify contesta "demasiados pedidos" aun con 1 pedido cada 15 min. Se cubre con staticICE |
 | Computer & Parts Land (directo) | bloqueada | Cloudflare. Sus precios en staticICE se filtran si están desfasados |
 | Reddit | fuera de la Fase 1 | RSS cortado el 13/11/2026, API sin acceso nuevo desde el 31/10/2026 y `robots.txt` con `Disallow: /` |
-| Mercado Libre | Fase 3 | la API pide token OAuth (sin token: 403) |
+| Venex (directo) | 403 desde el 18/11 | contesta 403 a GitHub Actions: queda en pausa (cada vez más larga) y sus precios salen de HardGamers |
+| Mercado Libre (búsqueda abierta) | 403 | `/sites/MLA/search` no contesta a servidores de datacenter: se usa el catálogo con la app (ver abajo) |
 | Twitter/X | no | la API cobra por post leído |

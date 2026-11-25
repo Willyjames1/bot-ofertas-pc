@@ -38,22 +38,42 @@ def post(id_, titulo, votos=3, url_tienda=None):
 # ------------------------------------------------------------------ objetivos cargados
 
 @pytest.mark.parametrize("titulo,cat,moneda,esperado", [
-    ("MSI RTX 5070 Ti 16G Ventus 3X OC", "placas", "AUD", 1450),
-    ("MSI RTX 5070 Ti 16G Ventus 3X OC", "placas", "ARS", 2100000),
-    ("Gigabyte RTX 5080 16GB Windforce", "placas", "AUD", 1900),
-    ("Gigabyte RTX 5080 16GB Windforce", "placas", "ARS", 2800000),
-    ("AMD Ryzen 9 9900X AM5", "cpu", "AUD", 580),
-    ("AMD Ryzen 9 9900X AM5", "cpu", "ARS", 650000),
-    ("AMD Ryzen 9 9950X AM5", "cpu", "AUD", 800),
-    ("AMD Ryzen 9 9950X AM5", "cpu", "ARS", 1000000),
-    ("Kingston FURY 32GB (2x16GB) DDR5 6000MHz CL30", "ram", "AUD", 550),
-    ("Kingston FURY 32GB (2x16GB) DDR5 6000MHz CL30", "ram", "ARS", 750000),
-    ("Kingston FURY 32GB (2x16GB) DDR5 6400MHz CL32", "ram", "AUD", 550),  # 6400 también cuenta
-    ("G.Skill 64GB (2x32GB) DDR5 6000MHz CL30", "ram", "AUD", 1100),
+    ("MSI RTX 5070 Ti 16G Ventus 3X OC", "placas", "AUD", 1440),
+    ("Kingston FURY 32GB (2x16GB) DDR5 6000MHz CL30", "ram", "AUD", 500),
+    ("Kingston FURY 32GB (2x16GB) DDR5 6400MHz CL32", "ram", "AUD", 500),  # 6400 también cuenta
 ])
 def test_objetivos_del_pedido(titulo, cat, moneda, esperado):
+    """Los de los posts de OzBargain (placas.objetivos / ram.objetivos)."""
     o = oferta(titulo, 1, cat=cat)
     assert objetivo_de(CFG, cat, o.modelo, o.datos, moneda) == esperado
+
+
+@pytest.mark.parametrize("titulo,cat,pais,objetivo", [
+    ("MSI RTX 5070 Ti 16G Ventus 3X OC", "placas", "AU", {"AUD": 1440, "USD": 1250}),
+    ("MSI RTX 5070 Ti 16G Ventus 3X OC", "placas", "AR", {"AUD": 1440, "USD": 1250}),
+    ("Kingston FURY 32GB (2x16GB) DDR5 6000MHz CL30", "ram", "AU", {"AUD": 500, "USD": 520}),
+    ("Kingston FURY 32GB (2x16GB) DDR5 6400MHz CL36", "ram", "AR", {"AUD": 500, "USD": 520}),
+    ("Samsung 990 PRO 2TB NVMe M.2", "ssd", "AR", {"AUD": 380, "USD": 230}),
+])
+def test_objetivos_de_lo_que_falta(titulo, cat, pais, objetivo):
+    """Lo de las tiendas: compras.items (🇦🇷 en USD MEP, 🇦🇺 en AUD)."""
+    from bot import compras
+    o = oferta(titulo, 1, cat=cat, pais=pais)
+    it = compras.item_de(CFG, {"categoria": cat, "titulo": titulo, "modelo": o.modelo, "datos": o.datos}, pais)
+    assert it is not None and it.objetivo == objetivo
+
+
+def test_lo_que_no_esta_en_la_lista_no_avisa():
+    from bot import compras
+    cl40 = oferta("Corsair 32GB (2x16GB) DDR5 6000MHz CL40", 1, cat="ram")
+    assert compras.item_de(CFG, {"categoria": "ram", "titulo": cl40.titulo, "datos": cl40.datos}, "AU") is None
+    tb1 = oferta("Samsung 990 PRO 1TB NVMe M.2", 1, cat="ssd")
+    assert compras.item_de(CFG, {"categoria": "ssd", "titulo": tb1.titulo, "datos": tb1.datos}, "AR") is None
+    assert compras.comprado(CFG, "cpu") == "Ryzen 9 9900X"
+    db = DB(":memory:")
+    m = Motor(CFG, AJ, db, COT, datetime.now(timezone.utc))
+    cpu = oferta("AMD Ryzen 9 9950X AM5", 100, cat="cpu")
+    assert m.evaluar_oferta(cpu, db.guardar_oferta(cpu)) == []   # CPU ya comprado
 
 
 def test_objetivos_que_no_aplican():
@@ -62,7 +82,7 @@ def test_objetivos_que_no_aplican():
     lenta = oferta("Kingston 32GB (2x16GB) DDR5 5600MHz CL36", 1, cat="ram")
     assert objetivo_de(CFG, "ram", lenta.modelo, lenta.datos, "AUD") is None
     assert objetivo_de(CFG, "ram", lenta.modelo, lenta.datos, "ARS") is None
-    assert objetivo_de(CFG, "ram", "x", {"capacidad_gb": 64, "modulos": 2, "velocidad": 5600}, "ARS") == 1800000
+    assert objetivo_de(CFG, "ram", "x", {"capacidad_gb": 64, "modulos": 2, "velocidad": 5600}, "AUD") is None
 
 
 def test_ram_cumple():
@@ -83,8 +103,11 @@ def test_mensaje_dice_cuanto_abajo_del_objetivo():
     av = m.evaluar_oferta(o, db.guardar_oferta(o))
     assert len(av) == 1 and av[0].urgente
     t = av[0].texto
-    assert "RTX 5070 Ti 16GB" in t and "$1.900.000</b> transferencia" in t and "Compra Gamer" in t
-    assert "10% abajo" in t and "Ver en la tienda" in t and o.url in t
+    assert "RTX 5070 Ti 16GB" in t and "💵 Transferencia: <b>$1.900.000</b>" in t and "Compra Gamer" in t
+    assert "💳 Lista: $2.100.000" in t
+    # objetivo en USD MEP: $1.900.000 / 1.580 = USD 1.203, 4% abajo de USD 1.250
+    assert "🎯 Objetivo: USD 1.250 MEP · <b>4% abajo</b> (USD 1.203)" in t
+    assert "Ver en la tienda" in t and o.url in t
 
 
 # ------------------------------------------------------------------ PCs armadas
@@ -156,11 +179,15 @@ def test_post_pc_ozbargain_bajo_3000_avisa_y_componentes_siguen_igual():
     caro = post("11", "Gaming PC Ryzen 7 9800X3D RTX 5080 32GB $3,299 @ Techfast", votos=80)
     mods = modelos_del_post(caro, PALABRAS)
     assert not [a for a in m.evaluar_post(caro, db.guardar_post(caro, ["x"]), mods) if a.urgente]  # PCs: solo por precio
-    cpu = post("12", "AMD Ryzen 9 9950X Desktop Processor $749 @ Amazon AU")
-    mods = modelos_del_post(cpu, PALABRAS)
-    assert [o.modelo for o in mods] == ["Ryzen 9 9950X"]
-    av = m.evaluar_post(cpu, db.guardar_post(cpu, ["Ryzen 9 9950X"]), mods)
+    gpu = post("12", "MSI RTX 5070 Ti 16GB Ventus 3X OC $1,349 @ Amazon AU")
+    mods = modelos_del_post(gpu, PALABRAS)
+    assert [o.modelo for o in mods] == ["RTX 5070 Ti 16GB"]
+    av = m.evaluar_post(gpu, db.guardar_post(gpu, ["RTX 5070 Ti 16GB"]), mods)
     assert av and av[0].urgente and "6% abajo" in av[0].texto
+    # el CPU ya está comprado: ni con 80 votos suena
+    cpu = post("13", "AMD Ryzen 9 9950X Desktop Processor $749 @ Amazon AU", votos=80)
+    mods = modelos_del_post(cpu, PALABRAS)
+    assert not [a for a in m.evaluar_post(cpu, db.guardar_post(cpu, ["Ryzen 9 9950X"]), mods) if a.urgente]
 
 
 @pytest.mark.parametrize("titulo,url_tienda", [

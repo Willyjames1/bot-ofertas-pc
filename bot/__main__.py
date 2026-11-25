@@ -171,6 +171,61 @@ def cmd_webhook(a):
         sys.exit(1)
 
 
+def _guardar_en_env(valores: dict[str, str]):
+    """Agrega o reemplaza líneas NOMBRE=valor en el .env local (que nunca se commitea)."""
+    ruta = Path(__file__).resolve().parent.parent / ".env"
+    lineas = ruta.read_text(encoding="utf-8").splitlines() if ruta.exists() else []
+    lineas = [x for x in lineas if x.split("=", 1)[0].strip() not in valores]
+    lineas += [f"{k}={v}" for k, v in valores.items()]
+    ruta.write_text("\n".join(lineas) + "\n", encoding="utf-8")
+
+
+def cmd_mercadolibre(a):
+    """url: el link para autorizar la app con tu cuenta. codigo: canjea el código por el refresh token y
+    carga ML_CLIENT_ID, ML_CLIENT_SECRET, ML_REFRESH_TOKEN y ML_CLAVE en GitHub Secrets (por stdin, con
+    gh) y en el .env. No imprime ningún valor."""
+    import os
+    import shutil
+    import subprocess
+    from .fuentes import mercadolibre as ml
+    from .red import Cliente
+    redirect = a.redirect or os.getenv("ML_REDIRECT_URI", "").strip() or ml.REDIRECT_POR_DEFECTO
+    cid, sec = ml._credenciales()
+    if not (cid and sec):
+        sys.exit("Faltan ML_CLIENT_ID y ML_CLIENT_SECRET en el .env (los de tu app en developers.mercadolibre.com.ar)")
+    if a.paso == "url":
+        print("Abrí este link, iniciá sesión con tu cuenta y aceptá. Después copiá el code=… de la barra de "
+              "direcciones y corré:  python -m bot mercadolibre codigo <el código>\n")
+        print(ml.url_autorizar(cid, redirect))
+        return
+    if not a.codigo:
+        sys.exit("Falta el código (el code=… que aparece en la barra de direcciones después de autorizar)")
+    cli = Cliente(pausa=(0.1, 0.2), respetar_robots=False)
+    try:
+        j = ml.canjear_codigo(cli, a.codigo.strip(), redirect)
+    except Exception as e:  # noqa: BLE001
+        sys.exit(f"Mercado Libre no aceptó el código ({type(e).__name__}): pedí uno nuevo con 'mercadolibre url' "
+                 "(dura 10 minutos y se usa una vez) y fijate que la Redirect URI sea exactamente la de la app")
+    finally:
+        cli.cerrar()
+    if not j.get("refresh_token"):
+        sys.exit("Mercado Libre no devolvió refresh token: en la app tiene que estar el permiso offline_access")
+    clave = os.getenv("ML_CLAVE", "").strip()
+    if not clave:
+        from cryptography.fernet import Fernet
+        clave = Fernet.generate_key().decode()
+    valores = {"ML_CLIENT_ID": cid, "ML_CLIENT_SECRET": sec, "ML_REFRESH_TOKEN": j["refresh_token"], "ML_CLAVE": clave}
+    _guardar_en_env({k: valores[k] for k in ("ML_REFRESH_TOKEN", "ML_CLAVE")})
+    print("Guardados en el .env: ML_REFRESH_TOKEN y ML_CLAVE")
+    if a.sin_github:
+        return
+    gh = shutil.which("gh") or r"C:\Program Files\GitHub CLI\gh.exe"
+    for nombre, valor in valores.items():
+        p = subprocess.run([gh, "secret", "set", nombre], input=valor, text=True, capture_output=True)
+        print(f"GitHub Secret {nombre}: {'cargado' if p.returncode == 0 else 'NO se pudo cargar'}")
+    print("Listo: la próxima corrida ya lee Mercado Libre (el refresh token se renueva y se guarda cifrado)")
+
+
 def main(argv=None):
     # la consola de Windows no es UTF-8 por defecto y los avisos llevan emojis
     for flujo in (sys.stdout, sys.stderr):
@@ -199,6 +254,12 @@ def main(argv=None):
     ex.set_defaults(f=cmd_exportar)
     sp.add_parser("generar-worker", help="regenera worker/src/normalizador_gen.js").set_defaults(
         f=cmd_generar_worker)
+    ml = sp.add_parser("mercadolibre", help="conectar la app de Mercado Libre (ver README)")
+    ml.add_argument("paso", choices=["url", "codigo"], help="url: el link para autorizar; codigo: canjear el código")
+    ml.add_argument("codigo", nargs="?", help="el ?code=… de la barra de direcciones después de autorizar")
+    ml.add_argument("--redirect", default=None, help="la Redirect URI de la app (por defecto https://www.mercadolibre.com.ar)")
+    ml.add_argument("--sin-github", action="store_true", help="no carga los secretos en GitHub (solo .env)")
+    ml.set_defaults(f=cmd_mercadolibre)
     wh = sp.add_parser("webhook", help="apunta Telegram al Worker y registra el menú de comandos")
     wh.add_argument("--url")
     wh.add_argument("--borrar", action="store_true", help="saca el webhook")

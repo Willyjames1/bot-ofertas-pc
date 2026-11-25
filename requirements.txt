@@ -4,3 +4,4 @@ PyYAML>=6.0
 python-dotenv>=1.0
 pytest>=8.0
 tzdata>=2024.1
+cryptography>=43     # Mercado Libre: el refresh token se guarda cifrado en la base (la rama datos es pública)

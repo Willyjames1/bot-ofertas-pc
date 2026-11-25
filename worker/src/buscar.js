@@ -32,7 +32,10 @@ export function preparar(d) {
     const m = modelos[mi];
     // motivo vacío = stock confirmado (JSON viejo, sin motivos: lo de staticICE queda sin confirmar)
     const motivo = iMotivo == null ? (staticice ? "staticICE no informa stock" : "") : (d.motivos?.[iMotivo] ?? "");
+    // 🇦🇷: [lista, cuotas, valor cuota, sin interés, contado, real] (JSON viejo: sin "pagos")
+    const pago = pais === "AR" && h ? d.pagos?.[h] ?? null : null;
     m.filas[pais].push({ m, pais, precio, tienda: d.tiendas[ti], url, detalle, haceMin, tipo, ok: !motivo, motivo, busca: null, h: h ?? null,
+      pago, real: pago?.[5] ?? precio,
       // SSD: el modelo de ssd_modelos.yaml y las velocidades (MB/s) de esta publicación
       linea: s?.[0] ?? null, lectura: s?.[1] ?? null, escritura: s?.[2] ?? null });
   }
@@ -254,8 +257,19 @@ function lineaSsd(f, cot) {
     (f.ok ? "" : ` · ⚠️ stock sin confirmar (${escapar(f.motivo)})`);
 }
 
+/** "💳 12 cuotas sin interés de $226.700 (≈ $2.390.000 contado)" o "" (sin cuotas leídas). */
+function cuotasAr(f) {
+  const p = f.pago;
+  if (!p || !p[1]) return "";
+  const conviene = p[4] && p[4] < f.precio ? ", conviene más que la transferencia" : "";
+  return `💳 ${p[1]} cuotas${p[3] ? " sin interés" : ""} de ${ars(p[2])} (≈ ${ars(p[4])} contado${conviene})`;
+}
+
 function linea(f, cot, varios) {
-  if (f.m.cat === "ssd") return lineaSsd(f, cot);
+  if (f.m.cat === "ssd") {
+    const c = cuotasAr(f);
+    return lineaSsd(f, cot) + (c ? `\n   ${c}` : "");
+  }
   const tienda = `<a href="${escapar(f.url)}">${escapar(f.tienda)}</a>`;
   let precio;
   if (f.pais === "AU") {
@@ -266,7 +280,8 @@ function linea(f, cot, varios) {
   }
   const detalle = [varios ? f.m.nombre : null, f.detalle || null, hace(f.haceMin + f.edadDatos),
     f.ok ? null : `⚠️ stock sin confirmar (${f.motivo})`].filter(Boolean).map(escapar).join(" · ");
-  return `${precio} · ${tienda}\n   ${detalle}`;
+  const c = cuotasAr(f);
+  return `${precio} · ${tienda}\n   ${detalle}` + (c ? `\n   ${c}` : "");
 }
 
 function tituloSsd(f) {
@@ -400,15 +415,23 @@ export function buscar(datos, texto, ahora = Date.now(), marcas = {}, q0 = null)
     const mezcla = top[p].some((f) => f.ok) && top[p].some((f) => !f.ok);
     const cuantos = n === 1 ? (top[p][0].ok ? "el único con stock" : "el único que encontré")
       : `los ${n} más ${q.cat === "ssd" && q.f.vel ? "rápidos" : "baratos"}` + (mezcla ? " (primero los de stock confirmado)" : "");
-    bloques.push(`${BANDERA[p]} <b>${NOMBRE_PAIS[p]}</b> — ${cuantos}\n` +
-      top[p].map((f, i) => `${i + 1}. ${linea(f, datos.cot, varios)}`).join("\n"));
+    let bloque = `${BANDERA[p]} <b>${NOMBRE_PAIS[p]}</b> — ${cuantos}\n` +
+      top[p].map((f, i) => `${i + 1}. ${linea(f, datos.cot, varios)}`).join("\n");
+    if (p === "AR" && datos.promos) {
+      // las promos de banco de las tiendas que aparecen (las 2 primeras tiendas)
+      const tiendas = [...new Set(top.AR.map((f) => f.tienda))].filter((t) => datos.promos[t]).slice(0, 2);
+      for (const t of tiendas) bloque += `\n🏦 ${escapar(t)}: ${escapar(datos.promos[t].join(" · "))}`;
+    }
+    bloques.push(bloque);
   }
   if (!q.pais && top.AU.length && top.AR.length && datos.cot) {
     const au = top.AU[0], ar = top.AR[0];
     const valija = datos.reglas.valija_aud;
-    const c = cuenta(datos.cot, datos.reglas, au.precio, ar.precio, valija);
+    // 🇦🇷 con el precio real: la transferencia o las cuotas pasadas a contado, lo que sea menor
+    const c = cuenta(datos.cot, datos.reglas, au.precio, ar.real, valija);
     const elPrimero = q.cat === "ssd" && q.f.vel ? "el más rápido" : "el más barato";
-    let cab = `⚖️ <b>Traerlo de 🇦🇺</b>: ${elPrimero} de cada país (${plata(au.precio, "AUD")} contra ${ars(ar.precio)})`;
+    let cab = `⚖️ <b>Traerlo de 🇦🇺</b>: ${elPrimero} de cada país (${plata(au.precio, "AUD")} contra ${ars(ar.real)}` +
+      (ar.real < ar.precio ? " en cuotas a contado" : "") + ")";
     const dudosos = [au, ar].filter((f) => !f.ok).map((f) => `${BANDERA[f.pais]} ${f.tienda}`);
     if (dudosos.length) cab += `\n   ⚠️ stock sin confirmar: ${escapar(dudosos.join(", "))}`;
     const cual = (f) => (f.m.cat === "ssd" ? `${f.linea || f.detalle} ${capacidad(f.m.datos.capacidad_tb)}` : f.m.nombre);

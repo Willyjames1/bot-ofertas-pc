@@ -23,6 +23,12 @@ class Gezatek(Tienda):
         "cpu": ["https://gezatek.com.ar/procesadores/"],
         "ram": ["https://gezatek.com.ar/memorias-ram/memoria-ram-ddr5/"],
         "pcs": ["https://gezatek.com.ar/pc-armadas/"],
+        "mothers": ["https://gezatek.com.ar/motherboards/mothers-amd-am5/"],
+        "fuentes": ["https://gezatek.com.ar/gabinetes-y-fuentes/fuentes/"],
+        "gabinetes": ["https://gezatek.com.ar/gabinetes-y-fuentes/gabinetes/"],
+        "refrigeracion": ["https://gezatek.com.ar/refrigeracion/water-cooling/"],
+        "teclados": ["https://gezatek.com.ar/perifericos/teclados-y-combos/"],
+        "mouse": ["https://gezatek.com.ar/perifericos/mouse/"],
     }
 
     def leer_pagina(self, url: str, categoria: str) -> tuple[list[Oferta], str | None]:

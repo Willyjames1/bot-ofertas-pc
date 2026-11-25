@@ -93,9 +93,10 @@ def test_aviso_au_con_comparacion_aduana_y_veredicto():
     db = db_con(oferta("Placa de Video MSI RTX 5070 Ti 16GB Ventus 3X", 2_244_000))
     m = Motor(CFG, AJ, db, COT, AHORA)
     o = oferta("MSI GeForce RTX 5070 Ti 16G Ventus 3X OC", 1441, pais="AU", tienda="centrecom")
-    t = m.texto_oferta("objetivo", o, 1699, None, 1450)
+    t = m.texto_oferta("baja", o, 1699, None, 1450)
     assert t.startswith("🔻 <b>RTX 5070 Ti 16GB</b> — bajó 15% en 🇦🇺")
-    assert "@ Centre Com: <b>A$1.441</b> (antes A$1.699)" in t
+    # no se muestra el "precio anterior" de la tienda: las referencias son las de 7 y 30 días
+    assert "@ Centre Com: <b>A$1.441</b>\n" in t and "antes A$1.699" not in t
     assert "≈ USD 976 ≈ $1.539.590 (MEP $1.577)" in t
     assert "Compra Gamer</a> $2.244.000 (mismo chip)" in t
     assert "💰 Diferencia: ~$704.410 más barato en 🇦🇺 (31%)" in t
@@ -113,8 +114,9 @@ def test_aviso_ar_invertido():
     t = m.texto_oferta("objetivo", o, None, None, 2_100_000)
     lineas = t.split("\n")
     assert lineas[0] == "🎯 <b>RTX 5070 Ti 16GB</b> — bajo tu objetivo en 🇦🇷"
-    assert lineas[1].startswith("🇦🇷 ") and lineas[2] == "   ≈ USD 1.078 (MEP $1.577)"
-    assert lineas[3].startswith("🇦🇺 Mejor precio:") and "≈ $1.539.590" in lineas[3]
+    assert lineas[1].startswith("🇦🇷 ") and lineas[2] == "💵 Precio: <b>$1.700.000</b>"
+    assert lineas[3] == "   ≈ USD 1.078 (MEP $1.577)"
+    assert lineas[4].startswith("🇦🇺 Mejor precio:") and "≈ $1.539.590" in lineas[4]
     assert "más barato traído de 🇦🇺" not in t and "❌ Veredicto: no conviene traerlo: comprá en 🇦🇷" in t
 
 
@@ -169,8 +171,7 @@ def test_resumen_diario():
     placa = next(b for b in bloques if "RTX 5070 Ti</b>" in b)
     assert "🇦🇷 $2.244.000 · " in placa and "🇦🇺 A$1.441 ≈ $1.539.590 · " in placa
     assert "→ 31% más barato en 🇦🇺 (con valija y aduana: 8% más barato traído)" in placa
-    cpu = next(b for b in bloques if "9900X" in b)
-    assert "🇦🇷 sin precio hoy" in cpu and "→" not in cpu
+    assert not any("9900X" in b for b in bloques)   # ya comprado: no va más en el resumen
     assert any("PC armada con RTX 5070 Ti" in b for b in bloques)
 
 

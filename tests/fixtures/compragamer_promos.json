@@ -1,0 +1,748 @@
+{
+  "title": "Conocé nuestras promociones",
+  "promos": [
+    {
+      "title": {
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 180,
+          "height": 42
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "3, 4, 5 y 6",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando con tarjeta de crédito de todos los bancos.",
+        "image": null,
+        "name": null
+      },
+      "description": "Hasta el 30/11/2026.",
+      "entities": null,
+      "actions": null
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Mercado pago",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/mp.svg",
+          "width": 180,
+          "height": 45
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "3",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando con tarjeta de crédito de todos los bancos.",
+        "image": null,
+        "name": null
+      },
+      "description": "Hasta el 30/11/2026.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"zipvk\">Oferta exclusiva para la cartera de consumo. Promoción válida en la República Argentina desde el 01/07/26 hasta el 30/11/2026 inclusive, abonando en 3 cuotas sin interés con todas las tarjetas de crédito procesadas a través de Mercado Pago operado por MercadoLibre S.R.L. (en adelante “Mercado Pago”). Beneficio no acumulable con otras promociones y/o beneficios vigentes en los comercios. CFT: 0,0% Costo Financiero Total Efectivo Anual. TNA: 0,0% Tasa Nominal Anual. TEA: 0,0% Tasa Efectiva Anual. Mercado Pago no es una entidad financiera. Los fondos en cuentas de pago no son depósitos garantizados. MercadoLibre S.R.L. CUIT 30-70308853-4, Caseros 3039, Piso 2º, CABA\".</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Mercado pago",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/mp.svg",
+          "width": 180,
+          "height": 45
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "3",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando en cuotas sin tarjeta.",
+        "image": null,
+        "name": null
+      },
+      "description": "Hasta el 30/11/2026.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"nf8g9\">El beneficio de 3 cuotas sin interés y sin tarjeta aplica exclusivamente para usuarios que accedan a financiamiento otorgado por Mercado Pago. Válido del 01/07/2026 al 30/11/2026, inclusive. Las ofertas de préstamo se encuentran sujetas a revisión crediticia y de riesgos por parte de Mercado Pago. Esta publicidad no implica una obligación de otorgar el préstamo.</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Banco ICBC",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/bank-icbc.svg",
+          "width": 140,
+          "height": 48
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "3, 6 y 9",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Hasta el 31/01/2027.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"a9kav\">PROPUESTA PARA CARTERA DE CONSUMO VALIDA EN LA REPUBLICA ARGENTINA HASTA EL 31/01/2027. 3, 6 y 9 SIN INTERES CON TARJETAS DE CREDITO VISA Y MASTERCARD ICBC. NO ACUMULABLE CON OTRAS PROMOCIONES. NO VALIDO PARA COMPRAS EFECTUADAS POR MERCADO PAGO, TODO PAGO, PAGO INMEDIATO O PAGO ENTRE PERSONAS. NO VALIDO PARA COMPRAS MAYORISTAS NI PARA TARJETAS VISA BUSINESS, VISA DISTRIBUTION, VISA PURCHASING, VISA PURCHASING CAMPO, CORPORATE, CORPORATE SIGNATURE, RECARGABLE EMPRESA Y VISA CUENTA CENTRAL. NO VALIDO PARA CLIENTES QUE POSEAN COMO UNICO PRODUCTO CAJA DE AHORRO EN PESOS EN ICBC. EL PLAN EN CUOTAS TIENE TASA NOMINAL ANUAL 0,0%, TASA EFECTIVA ANUAL 0,0% COSTO FINANCIERO TOTAL NOMINAL ANUAL (CFTNA) 0,0%. SOLO PARA CLIENTES QUE SE ENCUENTREN AL DIA EN SUS PRODUCTOS. INDUSTRIAL AND COMMERCIAL BANK OF CHINA (ARGENTINA) S.A.U. ES UNA SOCIEDAD ANÓNIMA UNIPERSONAL BAJO LA LEY ARGENTINA. SU ACCIONISTA LIMITA SU RESPONSABILIDAD AL CAPITAL APORTADO. (LEY 25738). CUIT: 30-70944784-6. FLORIDA 99, CABA.</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Banco ICBC",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/bank-icbc.svg",
+          "width": 140,
+          "height": 48
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "12",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Hasta el 31/01/2027.",
+      "entities": [
+        {
+          "image": {
+            "name": "Mastercard",
+            "url": "https://imagenes.compragamer.com/cms/bancos/logo/mastercard_symbol.svg",
+            "width": 40,
+            "height": 28
+          },
+          "name": "Mastercard"
+        }
+      ],
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"yzh5q\">PROPUESTA PARA CARTERA DE CONSUMO VALIDA EN LA REPUBLICA ARGENTINA. VIGENCIA HASTA EL 31/01/2027. 12 CUOTAS SIN INTERES CON TARJETA DE CREDITO MASTERCARD ICBC. NO ACUMULABLE CON OTRAS PROMOCIONES. NO VALIDO PARA COMPRAS EFECTUADAS POR MERCADO PAGO, TODO PAGO, PAGO INMEDIATO O PAGO ENTRE PERSONAS. NO VALIDO PARA COMPRAS MAYORISTAS. SOLO PARA CLIENTES QUE SE ENCUENTREN AL DIA EN SUS PRODUCTOS. (*) EL PLAN EN CUOTAS TIENE TASA NOMINAL ANUAL 0%, TASA EFECTIVA ANUAL 0% COSTO FINANCIERO TOTAL NOMINAL ANUAL (CFTNA) 0%. SOLO PARA CLIENTES QUE SE ENCUENTREN AL DIA EN SUS PRODUCTOS.INDUSTRIAL AND COMMERCIAL BANK OF CHINA (ARGENTINA) S.A.U. ES UNA SOCIEDAD ANONIMA UNIPERSONAL BAJO LA LEY ARGENTINA. SU ACCIONISTA LIMITA SU RESPONSABILIDAD AL CAPITAL APORTADO. CUIT: 30-70944784-6. FLORIDA 99, CABA *CFTNA: 0,00%</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Billetera YOY",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/bank-yoy.svg",
+          "width": 100,
+          "height": 59
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "3, 6, 9 y 12",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Hasta el 31/01/2027.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"30jeh\">PROPUESTA PARA CARTERA DE CONSUMO VALIDA EN LA REPUBLICA ARGENTINA HASTA EL 31/01/2027. 3, 6, 9 y 12 CUOTAS SIN INTERES CON TARJETA DE CREDITO MASTERCARD YOY. NO ACUMULABLE CON OTRAS PROMOCIONES. NO VALIDO PARA COMPRAS EFECTUADAS POR MERCADO PAGO, TODO PAGO, PAGO INMEDIATO O PAGO ENTRE PERSONAS. NO VALIDO PARA COMPRAS MAYORISTAS. SOLO PARA CLIENTES QUE SE ENCUENTREN AL DIA EN SUS PRODUCTOS. (*) EL PLAN EN CUOTAS TIENE TASA NOMINAL ANUAL 0%, TASA EFECTIVA ANUAL 0% COSTO FINANCIERO TOTAL NOMINAL ANUAL (CFTNA) 0%. SOLO PARA CLIENTES QUE SE ENCUENTREN AL DIA EN SUS PRODUCTOS.INDUSTRIAL AND COMMERCIAL BANK OF CHINA (ARGENTINA) S.A.U. ES UNA SOCIEDAD ANONIMA UNIPERSONAL BAJO LA LEY ARGENTINA. SU ACCIONISTA LIMITA SU RESPONSABILIDAD AL CAPITAL APORTADO. CUIT: 30-70944784-6. FLORIDA 99, CABA *CFTNA: 0,00%</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Supervielle",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/logo_supervielle.svg",
+          "width": 200,
+          "height": 31
+        }
+      },
+      "contents": [
+        {
+          "prefix": [
+            {
+              "text": "Hasta",
+              "bold": false
+            }
+          ],
+          "value": [
+            {
+              "text": "6",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Desde el 06/03/2026 hasta el 30/11/2026.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"aat51\">CFTEA: 0,00%. CARTERA CONSUMO. Banco Supervielle S.A., Reconquista 330, C.A.B.A., CUIT 33-50000517-9, Inscrip. I.G.J. N° 23, F° 502, L. 45, T° A de Estatutos Nac. (“el Banco”). Vigente en la República Argentina todos los días del 06/03/2026 hasta el 30/11/2026 para compras online en la web <a href=\"https://compragamer.com/\">https://compragamer.com/</a> abonadas con las tarjetas de crédito Visa y/o MasterCard (“las TC”) que formen parte de un paquete de productos del Banco. No aplica a tarjetas corporativas. Para compras en hasta 6 cuotas sin interés: Tasa Nominal Anual (TNA): 0,00%; Tasa Efectiva Anual (TEA): 0,00%; Costo Financiero Total Efectivo Anual (CFTEA): 0,00%; el CFTEA y demás datos económicos informados en el presente, corresponden exclusivamente a la operación de compra en cuotas objeto de la presente. Ej.: para una compra de $60.000 en 6 cuotas sin interés, del 1er al 6to resumen que se emitan con posterioridad al cierre y luego de realizada la compra se verá reflejado un consumo de $10.000 en cada uno de ellos. No aplica a pagos realizados a través de billeteras virtuales o 'proveedores de servicios de pago', excepto MODO. No combinable con otras promociones ni descuentos vigentes, excepto MODO. La marca “MODO” es propiedad de Play Digital S.A., CUIT 30-71682943-6, domicilio en Av. del Libertador 7208, Torre principal, Piso 3, C.A.B.A. El Banco no es responsable por los productos y/o servicios comercializados por las marcas y locales participantes en las promociones.</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Comafi v2",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/Comafi-Logos_logo-comafi-principal_1.svg",
+          "width": 180,
+          "height": 49
+        }
+      },
+      "contents": [
+        {
+          "prefix": [
+            {
+              "text": "Hasta",
+              "bold": false
+            }
+          ],
+          "value": [
+            {
+              "text": "6",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Hasta el 31/01/2027.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"u3e3o\">Oferta exclusiva para la cartera de consumo. Promoción válida todos los días desde el 01/08/26 hasta el 31/01/27 abonando con tarjetas de crédito Visa y Mastercard emitidas por Banco Comafi. Hasta 6 cuotas sin interés. Quedan excluidas aquellas tarjetas de crédito Credial, Business y Corporativas emitidas en Argentina por Banco Comafi. Los descuentos se realizan sobre precio de lista, son automáticos y se acreditarán a los 60 días en el resumen de tarjeta del ingreso del consumo. No acumulable con otras promociones ni entre sí. Sólo válido para aquellos clientes que se encuentren al día en sus productos. El beneficio no será aplicado en aquellas compras realizadas a través de MercadoPago. Consultar locales adheridos y medios de pago habilitados en www.tevabien.com. Banco Comafi no se responsabiliza por los cupones presentados por los establecimientos fuera de término, así como tampoco promociona ni garantiza los comercios, los productos y/o servicios o la calidad de los mismos. El beneficio no será aplicado para aquellas compras realizadas con Plan Gobierno. Banco Comafi S.A. con domicilio en Av. Roque Sáenz Peña 660, piso 1, CUIT 30-60473101-8.*CFT: 0,0% Costo Financiero Total Efectivo Anual. TNA: 0,0% Tasa Nominal Anual. TEA: 0,0% Tasa Efectiva Anual.</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Comafi UNICO v2",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/logo-ÚNICO-una-línea.svg",
+          "width": 200,
+          "height": 35
+        }
+      },
+      "contents": [
+        {
+          "prefix": [
+            {
+              "text": "Hasta",
+              "bold": false
+            }
+          ],
+          "value": [
+            {
+              "text": "9",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Desde el 01/08/2026 hasta el 31/01/2027.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"dibwk\">Oferta exclusiva para la cartera de consumo. Promoción válida todos los días desde el 01/08/26 hasta el 31/01/27 abonando con tarjetas de crédito Visa Signature, y Mastercard Black pertenecientes a Servicios de cuenta unico emitidas por Banco Comafi. Hasta 9 cuotas sin interés. Quedan excluidas aquellas tarjetas de crédito Credial, Business y Corporativas emitidas en Argentina por Banco Comafi. No acumulable con otras promociones ni entre sí. Sólo válido para aquellos clientes que se encuentren al día en sus productos. El beneficio no será aplicado en aquellas compras realizadas a través de MercadoPago. Consultar locales adheridos y medios de pago habilitados en www.tevabien.com. Banco Comafi no se responsabiliza por los cupones presentados por los establecimientos fuera de término, así como tampoco promociona ni garantiza los comercios, los productos y/o servicios o la calidad de los mismos. El beneficio no será aplicado para aquellas compras realizadas con Plan Gobierno. Banco Comafi S.A. con domicilio en Av. Roque Sáenz Peña 660, piso 1, CUIT 30-60473101-8.*CFT: 0,0% Costo Financiero Total Efectivo Anual. TNA: 0,0% Tasa Nominal Anual. TEA: 0,0% Tasa Efectiva Anual.</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Banco San Juan",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/bank-san-juan.svg",
+          "width": 200,
+          "height": 35
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "6",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Hasta el 31/01/2027.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"dibwk\">Válido Cartera Consumo. Vigencia: Aplicable todos los días de la semana desde el 17/08/2026 al 31/01/2027. Promoción: válida únicamente en comercios on line abonando en hasta 6 cuotas sin interés, con Tarjetas de Crédito emitidas por los BANCOS participantes, utilizando Modo desde la app del Banco o app Modo. Es necesario que previo a realizar el pago el usuario tenga asociada a MODO la cuenta y la tarjeta de crédito con la que realizará la compra. Ejemplo: En una compra de $300.000 abonada con tarjeta Visa o Mastercad del Banco en hasta 6 cuotas sin interés, el usuario recibirá en la primera liquidación un consumo de $50.000 y desde la segunda hasta la sexta liquidación un consumo de $50.000 en cada una de ellas. No aplica para pagos efectuados a través de otras billeteras o plataformas de pago. Consulte locales adheridos El Banco solo informa el medio y las condiciones para el pago de los productos/servicios ofrecidos por el proveedor, previo a la contratación del producto o servicio, verifique con el proveedor sus condiciones y alcance de la garantía. Banco de Santa Cruz S.A. - CUIT 30-50009880-1 – Av. Pte. Dr. Néstor C. Kirchner 812, Río Gallegos, Santa Cruz, Nuevo Banco Santa Fe S.A. – CUIT 30-69243266-1 - San Martin N°715, Provincia de Santa Fe, Banco de San Juan S.A. - CUIT 30-50000944-2 –Av. Ignacio de la Roza 85 oeste, Capital, San Juan, Nuevo Banco de Entre Ríos S.A. - Cuit 33-70799551-9 - Monte Caseros 128, Paraná, Entre Ríos. MODO es un servicio prestado por el proveedor de servicios tecnológicos play digital s.a. cuit 30716829436 av del libertador 7208 torre ii p.4 caba, siendo la marca modo de su propiedad.</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Banco Santa Fe",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/bank-santa-fe.svg",
+          "width": 200,
+          "height": 35
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "6",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Hasta el 31/01/2027.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"dibwk\">Válido Cartera Consumo. Vigencia: Aplicable todos los días de la semana desde el 17/08/2026 al 31/01/2027. Promoción: válida únicamente en comercios on line abonando en hasta 6 cuotas sin interés, con Tarjetas de Crédito emitidas por los BANCOS participantes, utilizando Modo desde la app del Banco o app Modo. Es necesario que previo a realizar el pago el usuario tenga asociada a MODO la cuenta y la tarjeta de crédito con la que realizará la compra. Ejemplo: En una compra de $300.000 abonada con tarjeta Visa o Mastercad del Banco en hasta 6 cuotas sin interés, el usuario recibirá en la primera liquidación un consumo de $50.000 y desde la segunda hasta la sexta liquidación un consumo de $50.000 en cada una de ellas. No aplica para pagos efectuados a través de otras billeteras o plataformas de pago. Consulte locales adheridos El Banco solo informa el medio y las condiciones para el pago de los productos/servicios ofrecidos por el proveedor, previo a la contratación del producto o servicio, verifique con el proveedor sus condiciones y alcance de la garantía. Banco de Santa Cruz S.A. - CUIT 30-50009880-1 – Av. Pte. Dr. Néstor C. Kirchner 812, Río Gallegos, Santa Cruz, Nuevo Banco Santa Fe S.A. – CUIT 30-69243266-1 - San Martin N°715, Provincia de Santa Fe, Banco de San Juan S.A. - CUIT 30-50000944-2 –Av. Ignacio de la Roza 85 oeste, Capital, San Juan, Nuevo Banco de Entre Ríos S.A. - Cuit 33-70799551-9 - Monte Caseros 128, Paraná, Entre Ríos. MODO es un servicio prestado por el proveedor de servicios tecnológicos play digital s.a. cuit 30716829436 av del libertador 7208 torre ii p.4 caba, siendo la marca modo de su propiedad.</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Banco Santa Cruz",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/bank-santa-cruz.svg",
+          "width": 200,
+          "height": 33
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "6",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Hasta el 31/01/2027.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"dibwk\">Válido Cartera Consumo. Vigencia: Aplicable todos los días de la semana desde el 17/08/2026 al 31/01/2027. Promoción: válida únicamente en comercios on line abonando en hasta 6 cuotas sin interés, con Tarjetas de Crédito emitidas por los BANCOS participantes, utilizando Modo desde la app del Banco o app Modo. Es necesario que previo a realizar el pago el usuario tenga asociada a MODO la cuenta y la tarjeta de crédito con la que realizará la compra. Ejemplo: En una compra de $300.000 abonada con tarjeta Visa o Mastercad del Banco en hasta 6 cuotas sin interés, el usuario recibirá en la primera liquidación un consumo de $50.000 y desde la segunda hasta la sexta liquidación un consumo de $50.000 en cada una de ellas. No aplica para pagos efectuados a través de otras billeteras o plataformas de pago. Consulte locales adheridos El Banco solo informa el medio y las condiciones para el pago de los productos/servicios ofrecidos por el proveedor, previo a la contratación del producto o servicio, verifique con el proveedor sus condiciones y alcance de la garantía. Banco de Santa Cruz S.A. - CUIT 30-50009880-1 – Av. Pte. Dr. Néstor C. Kirchner 812, Río Gallegos, Santa Cruz, Nuevo Banco Santa Fe S.A. – CUIT 30-69243266-1 - San Martin N°715, Provincia de Santa Fe, Banco de San Juan S.A. - CUIT 30-50000944-2 –Av. Ignacio de la Roza 85 oeste, Capital, San Juan, Nuevo Banco de Entre Ríos S.A. - Cuit 33-70799551-9 - Monte Caseros 128, Paraná, Entre Ríos. MODO es un servicio prestado por el proveedor de servicios tecnológicos play digital s.a. cuit 30716829436 av del libertador 7208 torre ii p.4 caba, siendo la marca modo de su propiedad.</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "Banco Entre Rios",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/bank-entre-rios.svg",
+          "width": 200,
+          "height": 35
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "6",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Hasta el 31/01/2027.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"dibwk\">Válido Cartera Consumo. Vigencia: Aplicable todos los días de la semana desde el 17/08/2026 al 31/01/2027. Promoción: válida únicamente en comercios on line abonando en hasta 6 cuotas sin interés, con Tarjetas de Crédito emitidas por los BANCOS participantes, utilizando Modo desde la app del Banco o app Modo. Es necesario que previo a realizar el pago el usuario tenga asociada a MODO la cuenta y la tarjeta de crédito con la que realizará la compra. Ejemplo: En una compra de $300.000 abonada con tarjeta Visa o Mastercad del Banco en hasta 6 cuotas sin interés, el usuario recibirá en la primera liquidación un consumo de $50.000 y desde la segunda hasta la sexta liquidación un consumo de $50.000 en cada una de ellas. No aplica para pagos efectuados a través de otras billeteras o plataformas de pago. Consulte locales adheridos El Banco solo informa el medio y las condiciones para el pago de los productos/servicios ofrecidos por el proveedor, previo a la contratación del producto o servicio, verifique con el proveedor sus condiciones y alcance de la garantía. Banco de Santa Cruz S.A. - CUIT 30-50009880-1 – Av. Pte. Dr. Néstor C. Kirchner 812, Río Gallegos, Santa Cruz, Nuevo Banco Santa Fe S.A. – CUIT 30-69243266-1 - San Martin N°715, Provincia de Santa Fe, Banco de San Juan S.A. - CUIT 30-50000944-2 –Av. Ignacio de la Roza 85 oeste, Capital, San Juan, Nuevo Banco de Entre Ríos S.A. - Cuit 33-70799551-9 - Monte Caseros 128, Paraná, Entre Ríos. MODO es un servicio prestado por el proveedor de servicios tecnológicos play digital s.a. cuit 30716829436 av del libertador 7208 torre ii p.4 caba, siendo la marca modo de su propiedad.</p>"
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "image": {
+          "name": "banco_ciudad_logo",
+          "url": "https://imagenes.compragamer.com/cms/bancos/banco_ciudad_logo.svg",
+          "width": 200,
+          "height": 44
+        }
+      },
+      "contents": [
+        {
+          "prefix": null,
+          "value": [
+            {
+              "text": "3 y 6",
+              "bold": true
+            }
+          ],
+          "suffix": [
+            {
+              "text": "Cuotas",
+              "bold": false
+            },
+            {
+              "text": "Sin interés",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "indication": {
+        "text": "Pagando desde",
+        "image": {
+          "name": "MODO",
+          "url": "https://imagenes.compragamer.com/cms/bancos/logo/modo.svg",
+          "width": 80,
+          "height": 19
+        },
+        "name": "MODO"
+      },
+      "description": "Desde el 02/11/26 hasta el 31/01/2027.",
+      "entities": null,
+      "actions": [
+        {
+          "label": "Ver términos y condiciones",
+          "link": null,
+          "dialog": {
+            "title": "Términos y condiciones",
+            "content": "<p data-block-key=\"hgpas\">Promoción ofrecida por el Banco de la Ciudad de Buenos Aires, CUIT 30-99903208-3 (Banco Ciudad) válida para toda la República Argentina, todos los días desde del 02/11/26 al 31/01/2027 inclusive, para compras en 3 (tres) y 6 (seis) cuotas sin interés en la tienda online de <a href=\"https://compragamer.com/\">https://compragamer.com/</a> , pagando exclusivamente con qr MODO desde App Ciudad o Buepp con tarjetas de crédito Visa o Mastercard de Banco Ciudad. Conforme RES.51- E/2017, 240 E/2017 y 12/2024. Costo financiero total expresado en tasa efectiva anual (C.F.T.E.A.): 0,00% tasa nominal anual (T.N.A): 0,00%. costo financiero total (C.F.T): 0,00%. La presente promoción es válida sólo para consumos de tipo familiar. Quedan excluidas de la promoción las tarjetas corporativas.</p>"
+          }
+        }
+      ]
+    }
+  ]
+}

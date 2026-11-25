@@ -41,6 +41,19 @@ CREATE TABLE IF NOT EXISTS verificaciones(
 -- lo que marcaste "❌ Sin stock" en Telegram: oculto hasta que la tienda lo vuelva a mostrar con stock
 CREATE TABLE IF NOT EXISTS ocultos(
   url TEXT PRIMARY KEY, h TEXT, ts TEXT, visto_sin_stock TEXT, levantado TEXT);
+-- el dólar MEP de cada día (argentinadatos.com, y el de nuestras corridas): para pasar a USD precios viejos
+CREATE TABLE IF NOT EXISTS mep_diario(fecha TEXT PRIMARY KEY, mep REAL);
+-- el historial diario de cada publicación de HardGamers (el gráfico de su ficha: hasta 75 días)
+CREATE TABLE IF NOT EXISTS hg_historial(url TEXT, fecha TEXT, precio REAL, PRIMARY KEY(url, fecha));
+-- la ficha de cada publicación que se abrió: el mínimo de HardGamers, y el precio de lista y las
+-- cuotas que publica la tienda (planes = JSON [[cuotas, valor cuota, sin interés, medio], ...])
+CREATE TABLE IF NOT EXISTS fichas(
+  url TEXT PRIMARY KEY, ts TEXT, minimo REAL, minimo_dias INTEGER, lista REAL, planes TEXT, destino TEXT,
+  lista_antes REAL, planes_antes TEXT, ts_antes TEXT);
+-- promociones bancarias de cada tienda (se leen una vez por día)
+CREATE TABLE IF NOT EXISTS promos(
+  tienda TEXT, clave TEXT, texto TEXT, cuotas INTEGER, sin_interes INTEGER, medio TEXT, vence TEXT,
+  general INTEGER, primera_vez TEXT, ultima_vez TEXT, PRIMARY KEY(tienda, clave));
 """
 
 
@@ -253,8 +266,8 @@ class DB:
     def actualizar_ocultos(self, ahora: datetime | None = None) -> int:
         """Destapa lo que marcaste sin stock cuando la tienda lo vuelve a mostrar: primero tiene que
         verse sin stock (o desaparecer) y después volver a aparecer. Devuelve cuántos se destaparon."""
+        estado = self.estado_stock(ahora) if ahora else self.estado_stock()   # el de esa hora (los tests)
         ahora = ahora or datetime.now(timezone.utc)
-        estado = self.estado_stock()
         levantados = 0
         for o in self.ocultos_activos():
             fila = self.c.execute("SELECT * FROM ofertas WHERE url=?", (o["url"],)).fetchone()
